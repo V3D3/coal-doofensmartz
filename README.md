@@ -26,7 +26,7 @@ Then:<br>
 
 This will commit the changes to your **local** repository.<br>
 Now, push these changes online:<br>
-`git push origin master`<br>
+`git push origin main`<br>
 Note that you'll have to login to GitHub, use your GitHub credentials.
 
 Or replace the message with something more descriptive, as you see fit.<br>
@@ -35,13 +35,13 @@ This guide was a one-time setup.<br>
 
 # Getting changes
 To get the latest version of the repository, type:<br>
-`git pull origin master`
+`git pull origin main`
 
 # Making changes
 To upload your code, type:<br>
 `git add .`<br>
 `git commit -m "<Enter your commit message here>"`<br>
-`git push origin master`<br>
+`git push origin main`<br>
 
 The first command adds all files to the staging area.<br>
 The second command commits it locally.<br>
