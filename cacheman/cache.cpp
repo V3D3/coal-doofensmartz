@@ -26,7 +26,7 @@ typedef unsigned int uint;
 *    Application        : Used to represent a block of data in a cache
 *    Inheritances       : Nil
 -------------------------------------------------------------------------------------------------*/
-typedef struct cacheblockst
+typedef struct cacheblock
 {
     uint*       tag = NULL;       //tag of a cache block
     bool        dirty = false;    //a bit to indicate whether any changes are made to a block or not.
