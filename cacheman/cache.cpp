@@ -421,3 +421,42 @@ void Cache::write(uint address, uint* buffer, uint count)
     uint index = getIndex(address);
     sets[index]->write(address, buffer, count);
 }
+
+
+/*-------------------------------------------------------------------------------------------------
+*    Function Name : main
+*    Args          : Nil
+*    Return Type   : int(0)
+*    Application   : Entry point to the Proram
+-------------------------------------------------------------------------------------------------*/
+int main()
+{
+    std::cout << "Cache Simulator" << std::endl;
+    int cacheSize, blockSize, org, repPolicy;   //parameters required to define the cache
+
+    ifstream fileObj;       //ofstream class object for the file Handling   //inputfile
+    ofstream fileObjOut;    //ofstream class object for the file Handling   //outputfile
+    uint hexCode;   //hexcode for request and address
+
+    fileObj.open("input.txt", ios::in); //opens a file for reading
+    fileObjOut.open("output.txe", ios::trunc | ios::out);   //opens a file and clears previous contents for new output
+
+    fileObj >> cacheSize >> blocksize >> org >> repPolicy;  //cache parameters
+    cache L1(cacheSize, blockSize, org, repPolicy); //creating a cache object
+
+    while(fileObj >> hexCode)   //while EOF is not reached
+    {
+        //code for processing requests
+    }
+
+    fileObjOut << L1.compMiss << std::endl;
+    fileObjOut << L1.capMiss << std::endl;
+    fileObjOut << L1.confMiss << std::endl;
+    fileObjOut << L1.readMiss << std::endl;
+    fileObjOut << L1.writeMiss << std::endl;
+    fileObjOut << L1.dirtEvic << std::endl;
+    
+    fileObj.close();    //closing the inputfile
+    fileObjOut.close(); //closing the ouput file 
+    return 0;   //succesful run of the code
+}
