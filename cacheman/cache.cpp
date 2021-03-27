@@ -1,4 +1,6 @@
 #include <iostream>
+#include <fstream>
+#include <cassert>
 /*-------------------------------------------------------------------------------------------------
 *    Author   : Team DOOFENSMARTZ
 *    Code     : CPP code for a Cache Simulator
@@ -28,6 +30,39 @@ typedef unsigned int uint;
 #define C_CIN 0
 #define C_HIN 1
 
+// Address Constraints
+#define C_TRAC_HEX_LEN 8
+#define C_ADDR_LEN 32
+
+//Note: Cache supports 32-bits, but leading bit is masked off since
+//      it indicates r/w. If input is provided and processed differently
+//      in main(), Cache can handle 32-bit addresses.
+
+int log2(uint x)
+{
+    int r = 0;
+    while(x > 0)
+    {
+        x >> 1;
+        r++;
+    }
+
+    return r - 1;
+}
+
+int pow2(uint n)
+{
+    int r = 1;
+    while(n > 0)
+    {
+        r << 1;
+        r++;
+    }
+
+
+    return r;
+}
+
 /*-------------------------------------------------------------------------------------------------
 *    Class Name         : Memory
 *    Application        : Simulates memory
@@ -41,14 +76,17 @@ public:
     void write(uint addr, uint* buffer, uint wordCount = 1);
 };
 
-void Memory::read(uint addr, uint* buffer, uint wordCount = 1)  {
+void Memory::read(uint addr, uint* buffer, uint wordCount = 1)
+{
     //dummy memory, does nothing
-    for(uint i = 0; i < wordCount; i++)  {
+    for(uint i = 0; i < wordCount; i++)
+    {
         buffer[i] = 0;
     }
 }
 
-void Memory::write(uint addr, uint* buffer, uint wordCount = 1)  {
+void Memory::write(uint addr, uint* buffer, uint wordCount = 1)
+{
     //does absolutely nothing
 }
 
@@ -67,6 +105,7 @@ private:
     int    blockSize;
     uint*  data = NULL;      //stores data of the cacheBlock
 
+    uint getOffset(uint addr);
 public:
     CacheBlock(int blockSize)
     {
@@ -80,8 +119,8 @@ public:
     uint getTag();
     void setTag(uint tag);
 
-    void write(uint offset, uint* data, uint count = 1);
-    void read(uint offset, uint* bufferWord, uint count = 1);
+    void write(uint address, uint* data, uint count = 1);
+    void read(uint address, uint* data, uint count = 1);
 };
 
 typedef struct BlockNodest
@@ -90,32 +129,48 @@ typedef struct BlockNodest
     struct BlockNodest*  next  = NULL;
 }  BlockNode;
 
-bool CacheBlock::isValid()  {
+uint CacheBlock::getOffset(uint addr)
+{
+    return addr & (blockSize - 1);
+}
+
+bool CacheBlock::isValid()
+{
     return valid;
 }
 
-bool CacheBlock::isDirty()  {
+bool CacheBlock::isDirty()
+{
     return dirty;
 }
 
-void CacheBlock::write(uint offset, uint* data, uint count = 1)  {
+void CacheBlock::write(uint address, uint* data, uint count = 1)
+{
+    uint offset = getOffset(address);
+
     assert(valid);
     assert(count < blockSize);
     assert(offset + count < blockSize);
 
-    dirty = true;
+    dirty = valid;
+    valid = valid || (!valid);
     
-    for(int i = 0; i < count; i++)  {
+    for(int i = 0; i < count; i++)
+    {
         this->data[offset + i] = data[i];
     }
 }
 
-void CacheBlock::read(uint offset, uint* data, uint count = 1)  {
+void CacheBlock::read(uint address, uint* data, uint count = 1)
+{
+    uint offset = getOffset(address);
+
     assert(valid);
     assert(count < blockSize);
     assert(offset + count < blockSize);
     
-    for(int i = 0; i < count; i++)  {
+    for(int i = 0; i < count; i++)
+    {
         data[i] = this->data[offset + i];
     }
 }
@@ -133,16 +188,35 @@ private:
     int         repPolicy;  //repPolicy is to identify replcement policy
     int         blockSize;
 
-    void        blockReplacement();
-    uint        getTag(uint addr);
+    int offsetLength;
+    int indexLength;
+    int tagLength;
+    
+    Memory* memReference;
 
-public: //publicFunctions
-    Set(int setSize, int repPolicy, int blockSize)
+    uint getTag(uint addr);
+    //reflects block access in PLRU/LRU/others
+    void reflectBlockAccess(BlockNode* blockPtr);
+    //adds new block to set, replaces victim block
+    void addNewBlock(BlockNode* blockPtr);
+    //writes back a victim block
+    void writeBack(BlockNode* victimPtr);
+
+public:
+    Set(Memory* mR, int numSets, int setSize, int blockSize, int repPolicy)
     {
         //absorb params
+        this->memReference = mR;
+        
         this->size = setSize;
+        this->blockSize = blockSize;
+
         this->repPolicy = repPolicy;
-        this->blockSize = blockSize;    
+
+        //calculate addr fields' lengths
+        offsetLength = log2(blockSize);
+        indexLength = log2(numSets);
+        tagLength = C_ADDR_LEN - (offsetLength + indexLength);
 
         //allocate blocks
         this->head = new BlockNode(); 
@@ -161,10 +235,120 @@ public: //publicFunctions
         //at this point, all blocks have been allocated, and are marked as invalid (default)
     }
 
-    //read from an address
-    uint read(uint address);
-    void write(uint address, uint data);
+    void read(uint address, uint* data, uint count = 1);
+    void write(uint address, uint* data, uint count = 1);
 };
+
+uint Set::getTag(uint addr)
+{
+    return (addr >> (C_ADDR_LEN - tagLength));
+}
+
+void Set::read(uint address, uint* data, uint count = 1)
+{
+    uint tag    = getTag(address);
+
+    //look for block
+    BlockNode* tmp = head;
+
+    while(tmp != NULL)
+    {
+        if(tmp->block->isValid())
+        {
+            if(tmp->block->getTag() == tag)
+            {
+                ////// HIT ///////
+
+                //read data
+                tmp->block->read(address, data, count);
+
+                //update block ordering (for r-policy)
+                reflectBlockAccess(tmp);
+
+                return;
+            }
+        }
+
+        tmp = tmp->next;
+    }
+
+    ////// MISS //////
+
+    //make a new block
+    BlockNode* fetchedBlock = new BlockNode();
+    fetchedBlock->block = new CacheBlock(blockSize);
+
+    //read required location into it
+    uint* buffer = new uint[blockSize];
+    
+    memReference->read(address, buffer, blockSize);
+    fetchedBlock->block->write(address, buffer, blockSize);
+
+    //add it to the set (replacing victim if needed)
+    //automatically handles reflecting access
+    addNewBlock(fetchedBlock);
+
+    //read data into given buffer
+    fetchedBlock->block->read(address, data, count);
+}
+
+void Set::write(uint address, uint* data, uint count = 1)
+{
+    uint tag = getTag(address);
+
+    //look for block
+    BlockNode* tmp = head;
+    
+    while(tmp != NULL)
+    {
+        if(tmp->block->isValid())
+        {
+            if(tmp->block->getTag() == tag)
+            {
+                ////// HIT //////
+
+                //write data
+                tmp->block->write(address, data, count);
+
+                //update block ordering (for r-policy)
+                reflectBlockAccess(tmp);
+
+                return;
+            }
+        }
+
+        tmp = tmp->next;
+    }
+
+    ////// MISS //////
+
+    //make a new block
+    BlockNode* fetchedBlock = new BlockNode();
+    fetchedBlock->block = new CacheBlock(blockSize);
+
+    //read from memory into it first*
+    uint* buffer = new uint[blockSize];
+
+    memReference->read(address, buffer, blockSize);
+    fetchedBlock->block->write(address, buffer, blockSize);
+
+    //write into it
+    fetchedBlock->block->write(address, data, count);
+
+    //add the new block
+    addNewBlock(fetchedBlock);
+
+    /*
+        We need to read from mem into block first since block has just 1 dirty bit for
+        the whole block. Hence if only one word is written to it, the other, say 3 words
+        in the block are garbage and would overwrite useful data in memory on eviction.
+
+        Hence we first get all the words from the memory that fit into a block, then
+        write to this block (and delay reflecting the write into memory).
+        The dirty bit is set on the second write to the same block, so this way is also
+        consistent for setting that bit.
+    */
+}
 
 /*-------------------------------------------------------------------------------------------------
 *    Class Name         : Cache
@@ -180,12 +364,16 @@ private:
 
     int cacheSize;  //size of the cache
     int blockSize;  //size of the cache block
+
+    int offsetLength;
     
     int repPolicy;  //replacement policy
-    Set** sets;  //pointer to represent sets
+    Set** sets;     //pointer to represent sets
+
+    uint getIndex(uint address);
 
 public: //public functions
-    Cache(int cacheSize, int blockSize, int org, int repPolicy)
+    Cache(Memory* mR, int cacheSize, int blockSize, int org, int repPolicy)
     {
         //absorb params
         this->cacheSize = cacheSize;
@@ -195,19 +383,41 @@ public: //public functions
         this->repPolicy = repPolicy;
 
         //set associativity
-        if(org == 0)  {
+        if(org == 0)
+        {
             org = this->numBlocks;
         }
         this->numSets = (this->numBlocks) / org;
+        this->numWays = numBlocks / numSets;
+        
+        //calculate address field lengths
+        offsetLength = log2(blockSize);
 
         //allocating required memory for sets
         sets = new Set*[numSets];
         for(int i = 0; i < numSets; i++)
         {
-            sets[i] = new Set((this->numBlocks)/(this->numSets), repPolicy, blockSize);
+            sets[i] = new Set(mR, numSets, numWays, blockSize, repPolicy);
         }
     }
 
-    int read(int);      //reading from a required adress in cache
-    void write(int);    //writing into a given adress in cache
+    void read(uint address, uint* buffer, uint count);  //reading from a required adress in cache
+    void write(uint address, uint* buffer, uint count); //writing into a given adress in cache
 };
+
+uint Cache::getIndex(uint address)
+{
+    return (address >> offsetLength) & (numSets - 1);
+}
+
+void Cache::read(uint address, uint* buffer, uint count)
+{
+    uint index = getIndex(address);
+    sets[index]->read(address, buffer, count);
+}
+
+void Cache::write(uint address, uint* buffer, uint count)
+{
+    uint index = getIndex(address);
+    sets[index]->write(address, buffer, count);
+}
