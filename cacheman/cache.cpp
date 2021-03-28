@@ -10,8 +10,8 @@
 typedef unsigned int uint;
 
 // Cache Replacement Policies
-#define C_CRP_LRU     0
-#define C_CRP_RANDOM  1
+#define C_CRP_LRU     1
+#define C_CRP_RANDOM  0
 #define C_CRP_PSLRU   2
 
 // Output Scheme
@@ -35,7 +35,7 @@ int log2(uint x)
     int r = 0;
     while(x > 0)
     {
-        x >> 1;
+        x = x >> 1;
         r++;
     }
 
@@ -48,9 +48,8 @@ int pow2(uint n)
     while(n > 0)
     {
         r << 1;
-        r++;
+        n--;
     }
-
 
     return r;
 }
@@ -583,30 +582,34 @@ int main()
 {
     std::cout << "Cache Simulator" << std::endl;
     int cacheSize, blockSize, org, repPolicy;   //parameters required to define the cache
+    char command;
+    uint buffer;
 
     ifstream fileObj;       //ofstream class object for the file Handling   //inputfile
-    ofstream fileObjOut;    //ofstream class object for the file Handling   //outputfile
     uint hexCode;   //hexcode for request and address
 
     fileObj.open("input.txt", ios::in); //opens a file for reading
-    fileObjOut.open("output.txe", ios::trunc | ios::out);   //opens a file and clears previous contents for new output
 
     fileObj >> cacheSize >> blocksize >> org >> repPolicy;  //cache parameters
     cache L1(cacheSize, blockSize, org, repPolicy); //creating a cache object
 
     while(fileObj >> hexCode)   //while EOF is not reached
     {
-        //code for processing requests
+        std::cin >> command;
+        if(command == 'w')
+            L1.read(hexCode, &buffer);
+
+        else if(command == 'w')
+            L1.write(hexCode, &buffer);
     }
 
-    fileObjOut << L1.compMiss << std::endl;
-    fileObjOut << L1.capMiss << std::endl;
-    fileObjOut << L1.confMiss << std::endl;
-    fileObjOut << L1.readMiss << std::endl;
-    fileObjOut << L1.writeMiss << std::endl;
-    fileObjOut << L1.dirtEvic << std::endl;
+    std::cout << L1.compMiss << std::endl;
+    std::cout << L1.capMiss << std::endl;
+    std::cout << L1.confMiss << std::endl;
+    std::cout << L1.readMiss << std::endl;
+    std::cout << L1.writeMiss << std::endl;
+    std::cout << L1.dirtEvic << std::endl;
     
     fileObj.close();    //closing the inputfile
-    fileObjOut.close(); //closing the ouput file 
     return 0;   //succesful run of the code
 }
