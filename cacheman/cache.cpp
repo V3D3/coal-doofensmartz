@@ -12,7 +12,7 @@ typedef unsigned int uint;
 // Cache Replacement Policies
 #define C_CRP_LRU     1
 #define C_CRP_RANDOM  0
-#define C_CRP_PSLRU   2
+#define C_CRP_TREE   2
 
 // Output Scheme
 #define C_COUT 0
@@ -47,7 +47,7 @@ int pow2(uint n)
     int r = 1;
     while(n > 0)
     {
-        r << 1;
+        r = r << 1;
         n--;
     }
 
@@ -177,7 +177,7 @@ public:
     virtual BlockNode* getVictim(); //inclusive of invalid blocks
 };
 
-class RandomVictimManager : VictimManager
+class RandomVictimManager : public VictimManager
 {
 private:
     uint counter = 0;
@@ -206,7 +206,7 @@ BlockNode* RandomVictimManager::getVictim()  {
     return tmp;
 }
 
-class LRUVictimManager : VictimManager
+class LRUVictimManager : public VictimManager
 {
 private:
     Set* setRef = NULL;
@@ -245,7 +245,7 @@ BlockNode* LRUVictimManager::getVictim()  {
     return tmp;
 }
 
-class TreeVictimManager : VictimManager
+class TreeVictimManager : public VictimManager
 {
 private:
     bool* tree = NULL;
@@ -331,6 +331,7 @@ private:
     int index;
     
     Memory* memReference;
+    VictimManager* vicMan;
 
     uint getTag(uint addr);
     //reflects block access in PLRU/LRU/others
@@ -351,6 +352,48 @@ public:
     friend class LRUVictimManager;
     friend class TreeVictimManager;
 };
+
+uint Set::getTag(uint addr)
+{
+    return (addr >> (C_ADDR_LEN - tagLength));
+}
+
+void Set::reflectBlockAccess(BlockNode* blockPtr)  {
+    vicMan->reflectBlockAccess(blockPtr);
+}
+
+void Set::addNewBlock(BlockNode* blockPtr)  {
+    BlockNode* victimPtr = vicMan->getVictim();
+
+    if(victimPtr->block->isValid())  {
+        if(victimPtr->block->isDirty())  {
+            writeBack(victimPtr);
+        }
+    }
+
+    //add new block into list
+    if(victimPtr->prev != NULL)  {
+        victimPtr->prev->next = blockPtr;
+        blockPtr->prev = victimPtr->prev;
+    }
+    if(victimPtr->next != NULL)  {
+        victimPtr->next->prev = blockPtr;
+        blockPtr->next = victimPtr->next;
+    }
+
+    //get rid of the victim block
+    delete victimPtr;
+}
+
+void Set::writeBack(BlockNode* victimPtr)  {
+    uint memAddr = victimPtr->block->getTag();
+    memAddr = (memAddr << indexLength) + index;
+    memAddr = (memAddr << offsetLength);
+
+    uint* buffer = new uint[blockSize];
+    victimPtr->block->read(0, buffer, blockSize);
+    memReference->write(memAddr, buffer, blockSize);
+}
 
 Set::Set(Memory* mR, int index, int numSets, int setSize, int blockSize, int repPolicy)
 {
@@ -384,11 +427,15 @@ Set::Set(Memory* mR, int index, int numSets, int setSize, int blockSize, int rep
     }
 
     //at this point, all blocks have been allocated, and are marked as invalid (default)
-}
 
-uint Set::getTag(uint addr)
-{
-    return (addr >> (C_ADDR_LEN - tagLength));
+    //instantiate a victim manager
+    if(repPolicy == C_CRP_RANDOM)  {
+        vicMan = new RandomVictimManager(this);
+    }  else if(repPolicy == C_CRP_LRU)  {
+        vicMan = new LRUVictimManager(this);
+    }  else if(repPolicy == C_CRP_TREE)  {
+        vicMan = new TreeVictimManager(this);
+    }
 }
 
 void Set::read(uint address, uint* data, uint count = 1)
