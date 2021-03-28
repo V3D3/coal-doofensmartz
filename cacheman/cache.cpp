@@ -852,8 +852,17 @@ int main()
             L1.write(std::stoi(hexCode,0,16), &buffer);
     }
 
+    std::cout << L1.stat_cache_access << std::endl;
+    std::cout << L1.stat_cache_read << std::endl;
+    std::cout << L1.stat_cache_write << std::endl;
+    std::cout << L1.stat_cache_miss << std::endl;
     std::cout << L1.stat_cache_miss_compulsory << std::endl;
-    std::cout << L1.stat_cache_miss_capacity << std::endl;
+
+    if(!org)
+        std::cout << L1.stat_cache_miss_capacity << std::endl;
+
+    else
+        std::cout << 0 << std::endl;
     std::cout << L1.stat_cache_miss_conflict << std::endl;
     std::cout << L1.stat_cache_miss_read << std::endl;
     std::cout << L1.stat_cache_miss_write << std::endl;
