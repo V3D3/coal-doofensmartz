@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <cassert>
+
 /*-------------------------------------------------------------------------------------------------
 *    Author   : Team DOOFENSMARTZ
 *    Code     : CPP code for a Cache Simulator
@@ -30,6 +31,8 @@ typedef unsigned int uint;
 //      it indicates r/w. If input is provided and processed differently
 //      in main(), Cache can handle 32-bit addresses.
 
+//////      UTILITY FUNCTIONS      //////
+
 int log2(uint x)
 {
     int r = 0;
@@ -54,6 +57,17 @@ int pow2(uint n)
     return r;
 }
 
+//////      CLASSES      //////
+
+class Memory;
+class CacheBlock;
+class Set;
+class VictimManager;
+class RandomVictimManager;
+class LRUVictimManager;
+class TreeVictimManager;
+class Cache;
+
 /*-------------------------------------------------------------------------------------------------
 *    Class Name         : Memory
 *    Application        : Simulates memory
@@ -66,20 +80,6 @@ public:
     void read(uint addr, uint* buffer, uint wordCount = 1);
     void write(uint addr, uint* buffer, uint wordCount = 1);
 };
-
-void Memory::read(uint addr, uint* buffer, uint wordCount = 1)
-{
-    //dummy memory, does nothing
-    for(uint i = 0; i < wordCount; i++)
-    {
-        buffer[i] = 0;
-    }
-}
-
-void Memory::write(uint addr, uint* buffer, uint wordCount = 1)
-{
-    //does absolutely nothing
-}
 
 /*-------------------------------------------------------------------------------------------------
 *    Class Name         : CacheBlock
@@ -116,200 +116,6 @@ typedef struct BlockNodest
     struct BlockNodest*  prev  = NULL;
     struct BlockNodest*  next  = NULL;
 }  BlockNode;
-
-
-CacheBlock::CacheBlock(int blockSize)
-{
-    this->blockSize = blockSize;    //getting values into struct variables
-    this->data      = new uint[blockSize];   //the data of cache according to block
-}
-
-uint CacheBlock::getOffset(uint addr)
-{
-    return addr & (blockSize - 1);
-}
-
-bool CacheBlock::isValid()
-{
-    return valid;
-}
-
-bool CacheBlock::isDirty()
-{
-    return dirty;
-}
-
-void CacheBlock::write(uint address, uint* data, uint count = 1)
-{
-    uint offset = getOffset(address);
-
-    assert(valid);
-    assert(count < blockSize);
-    assert(offset + count < blockSize);
-
-    dirty = valid;
-    valid = valid || (!valid);
-    
-    for(int i = 0; i < count; i++)
-    {
-        this->data[offset + i] = data[i];
-    }
-}
-
-void CacheBlock::read(uint address, uint* data, uint count = 1)
-{
-    uint offset = getOffset(address);
-
-    assert(valid);
-    assert(count < blockSize);
-    assert(offset + count < blockSize);
-    
-    for(int i = 0; i < count; i++)
-    {
-        data[i] = this->data[offset + i];
-    }
-}
-
-class VictimManager
-{
-public:
-    virtual void reflectBlockAccess(BlockNode* accessedPtr);
-    virtual BlockNode* getVictim(); //inclusive of invalid blocks
-};
-
-class RandomVictimManager : public VictimManager
-{
-private:
-    uint counter = 0;
-    Set* setRef = NULL;
-public:
-    RandomVictimManager(Set* sR);
-    //nothing to reflect
-    void reflectBlockAccess(BlockNode* accessedPtr)  {}
-    BlockNode* getVictim();
-};
-
-RandomVictimManager::RandomVictimManager(Set* sR)  {
-    this->setRef = sR;
-}
-
-BlockNode* RandomVictimManager::getVictim()  {
-    uint t = counter;
-    counter = (counter + 1) % setRef->size;;
-    
-    BlockNode* tmp = setRef->head;
-    while(t > 0)  {
-        tmp = tmp->next;
-        t--;
-    }
-
-    return tmp;
-}
-
-class LRUVictimManager : public VictimManager
-{
-private:
-    Set* setRef = NULL;
-public:
-    LRUVictimManager(Set* sR);
-    void reflectBlockAccess(BlockNode* accessedPtr);
-    BlockNode* getVictim();
-};
-
-LRUVictimManager::LRUVictimManager(Set* sR)  {
-    this->setRef = sR;
-}
-
-void LRUVictimManager::reflectBlockAccess(BlockNode* accessedPtr)  {
-    BlockNode* tmp = setRef->head;
-
-    //remove accessed block from middle of set
-    accessedPtr->prev->next = accessedPtr->next;
-    accessedPtr->next->prev = accessedPtr->prev;
-
-    //make it the head
-    setRef->head = accessedPtr;
-    accessedPtr->prev = NULL;
-
-    //add the rest of the list to the end of the new head
-    setRef->head->next = tmp;
-    tmp->prev = setRef->head;
-}
-
-BlockNode* LRUVictimManager::getVictim()  {
-    BlockNode* tmp = setRef->head;
-    while(tmp->next != NULL)  {
-        tmp = tmp->next;
-    }
-
-    return tmp;
-}
-
-class TreeVictimManager : public VictimManager
-{
-private:
-    bool* tree = NULL;
-    Set* setRef = NULL;
-
-    uint setSize;
-public:
-    TreeVictimManager(Set* sR);
-    void reflectBlockAccess(BlockNode* accessedPtr);
-    BlockNode* getVictim();
-};
-
-TreeVictimManager::TreeVictimManager(Set* sR)  {
-    this->setRef = sR;
-    this->setSize = setRef->size;
-
-    //() : all init to false
-    tree = new bool[setSize - 1]();
-}
-
-void TreeVictimManager::reflectBlockAccess(BlockNode* accessedPtr)
-{
-    //intent: make bits in the path to root point away
-
-    //get index of accessedPtr in list
-    uint index = 0;
-    while(accessedPtr->prev != NULL)  {
-        index++;
-        accessedPtr = accessedPtr->prev;
-    }
-
-    //adjusted for 0-based indexing
-    int curr = index + setSize - 1; //issue: curr is int here
-    while(curr > -1)  {
-        //make the parent bit point away
-        tree[(curr - 1) / 2] = (curr % 2);
-        //go to parent bit
-        curr = (curr - 1) / 2;
-    }
-}
-
-BlockNode* TreeVictimManager::getVictim()  {
-    //adjusted for 0-based indexing
-    uint curr = 0;
-
-    while(curr < setSize - 1)  {
-        //go to child according to current bit
-        curr = (2 * curr) + tree[curr] + 1;
-
-        //invert the bit (/2 to go back up)
-        tree[(curr - 1) / 2] = !tree[(curr - 1) / 2];
-    }
-
-    curr = curr - setSize + 1;
-
-    //at this point, curr points to index of victim in set
-    BlockNode* temp = setRef->head;
-    while(curr > 0)  {
-        temp = temp->next;
-        curr--;
-    }
-
-    return temp;
-}
 
 /*-------------------------------------------------------------------------------------------------
 *    Class Name         : Set
@@ -353,30 +159,303 @@ public:
     friend class TreeVictimManager;
 };
 
+/*-------------------------------------------------------------------------------------------------
+*    Classes            : VictimManager (and specific implementations)
+*    Application        : Assist in tracking victims in Set
+*    Inheritances       : Nil
+-------------------------------------------------------------------------------------------------*/
+
+class VictimManager
+{
+public:
+    virtual void reflectBlockAccess(BlockNode* accessedPtr) = 0;
+    virtual BlockNode* getVictim() = 0; //inclusive of invalid blocks
+};
+
+class RandomVictimManager : public VictimManager
+{
+private:
+    uint counter = 0;
+    Set* setRef = NULL;
+public:
+    RandomVictimManager(Set* sR);
+    //nothing to reflect
+    void reflectBlockAccess(BlockNode* accessedPtr)  {}
+    BlockNode* getVictim();
+};
+
+class LRUVictimManager : public VictimManager
+{
+private:
+    Set* setRef = NULL;
+public:
+    LRUVictimManager(Set* sR);
+    void reflectBlockAccess(BlockNode* accessedPtr);
+    BlockNode* getVictim();
+};
+
+class TreeVictimManager : public VictimManager
+{
+private:
+    bool* tree = NULL;
+    Set* setRef = NULL;
+
+    uint setSize;
+public:
+    TreeVictimManager(Set* sR);
+    void reflectBlockAccess(BlockNode* accessedPtr);
+    BlockNode* getVictim();
+};
+
+
+/*-------------------------------------------------------------------------------------------------
+*    Class Name         : Cache
+*    Application        : Used to represent the cache memory
+*    Inheritances       : Nil
+-------------------------------------------------------------------------------------------------*/
+class Cache
+{
+private:
+    int numSets;   //number of sets in the cache
+    int numBlocks;  //number of blocks in the cache
+    int numWays;    //number of ways in the cache
+
+    int cacheSize;  //size of the cache
+    int blockSize;  //size of the cache block
+
+    int offsetLength;
+    
+    int repPolicy;  //replacement policy
+    Set** sets;     //pointer to represent sets
+
+    uint getIndex(uint address);
+
+public: //public functions
+    Cache(Memory* mR, int cacheSize, int blockSize, int org, int repPolicy);
+
+    void read(uint address, uint* buffer, uint count = 1);  //reading from a required adress in cache
+    void write(uint address, uint* buffer, uint count = 1); //writing into a given adress in cache
+};
+
+
+//////////////////////////////////////////////////////////////////////
+/////////////////////     MEMORY DEFINITIONS     /////////////////////
+//////////////////////////////////////////////////////////////////////
+
+void Memory::read(uint addr, uint* buffer, uint wordCount)
+{
+    //dummy memory, does nothing
+    for(uint i = 0; i < wordCount; i++)
+    {
+        buffer[i] = 0;
+    }
+}
+
+void Memory::write(uint addr, uint* buffer, uint wordCount)
+{
+    //does absolutely nothing
+}
+
+//////////////////////////////////////////////////////////////////////
+/////////////////////     BLOCK DEFINITIONS     //////////////////////
+//////////////////////////////////////////////////////////////////////
+
+CacheBlock::CacheBlock(int blockSize)
+{
+    this->blockSize = blockSize;    //getting values into struct variables
+    this->data      = new uint[blockSize];   //the data of cache according to block
+}
+
+uint CacheBlock::getOffset(uint addr)
+{
+    return addr & (blockSize - 1);
+}
+
+bool CacheBlock::isValid()          {return valid;}
+bool CacheBlock::isDirty()          {return dirty;}
+uint CacheBlock::getTag()           {return tag;}
+void CacheBlock::setTag(uint tag)   {this->tag = tag;}
+
+void CacheBlock::write(uint address, uint* data, uint count)
+{
+    uint offset = getOffset(address);
+
+    assert(valid);
+    assert(count < blockSize);
+    assert(offset + count < blockSize);
+
+    dirty = valid;
+    valid = valid || (!valid);
+    
+    for(int i = 0; i < count; i++)
+    {
+        this->data[offset + i] = data[i];
+    }
+}
+
+void CacheBlock::read(uint address, uint* data, uint count)
+{
+    uint offset = getOffset(address);
+
+    assert(valid);
+    assert(count < blockSize);
+    assert(offset + count < blockSize);
+    
+    for(int i = 0; i < count; i++)
+    {
+        data[i] = this->data[offset + i];
+    }
+}
+
+//////////////////////////////////////////////////////////////////////
+////////////////      VICTIM MANAGER DEFINITIONS      ////////////////
+//////////////////////////////////////////////////////////////////////
+
+RandomVictimManager::RandomVictimManager(Set* sR)
+{
+    this->setRef = sR;
+}
+
+BlockNode* RandomVictimManager::getVictim()
+{
+    uint t = counter;
+    counter = (counter + 1) % setRef->size;;
+    
+    BlockNode* tmp = setRef->head;
+    while(t > 0)  {
+        tmp = tmp->next;
+        t--;
+    }
+
+    return tmp;
+}
+
+LRUVictimManager::LRUVictimManager(Set* sR)
+{
+    this->setRef = sR;
+}
+
+void LRUVictimManager::reflectBlockAccess(BlockNode* accessedPtr)
+{
+    BlockNode* tmp = setRef->head;
+
+    //remove accessed block from middle of set
+    accessedPtr->prev->next = accessedPtr->next;
+    accessedPtr->next->prev = accessedPtr->prev;
+
+    //make it the head
+    setRef->head = accessedPtr;
+    accessedPtr->prev = NULL;
+
+    //add the rest of the list to the end of the new head
+    setRef->head->next = tmp;
+    tmp->prev = setRef->head;
+}
+
+BlockNode* LRUVictimManager::getVictim()
+{
+    BlockNode* tmp = setRef->head;
+    while(tmp->next != NULL)
+    {
+        tmp = tmp->next;
+    }
+
+    return tmp;
+}
+
+TreeVictimManager::TreeVictimManager(Set* sR)
+{
+    this->setRef = sR;
+    this->setSize = setRef->size;
+
+    //() : all init to false
+    tree = new bool[setSize - 1]();
+}
+
+void TreeVictimManager::reflectBlockAccess(BlockNode* accessedPtr)
+{
+    //intent: make bits in the path to root point away
+
+    //get index of accessedPtr in list
+    uint index = 0;
+    while(accessedPtr->prev != NULL)
+    {
+        index++;
+        accessedPtr = accessedPtr->prev;
+    }
+
+    //adjusted for 0-based indexing
+    int curr = index + setSize - 1; //issue: curr is int here
+    while(curr > -1)
+    {
+        //make the parent bit point away
+        tree[(curr - 1) / 2] = (curr % 2);
+        //go to parent bit
+        curr = (curr - 1) / 2;
+    }
+}
+
+BlockNode* TreeVictimManager::getVictim()
+{
+    //adjusted for 0-based indexing
+    uint curr = 0;
+
+    while(curr < setSize - 1)
+    {
+        //go to child according to current bit
+        curr = (2 * curr) + tree[curr] + 1;
+
+        //invert the bit (/2 to go back up)
+        tree[(curr - 1) / 2] = !tree[(curr - 1) / 2];
+    }
+
+    curr = curr - setSize + 1;
+
+    //at this point, curr points to index of victim in set
+    BlockNode* temp = setRef->head;
+    while(curr > 0)
+    {
+        temp = temp->next;
+        curr--;
+    }
+
+    return temp;
+}
+
+//////////////////////////////////////////////////////////////////////
+///////////////////////    SET DEFINITIONS     ///////////////////////
+//////////////////////////////////////////////////////////////////////
+
 uint Set::getTag(uint addr)
 {
     return (addr >> (C_ADDR_LEN - tagLength));
 }
 
-void Set::reflectBlockAccess(BlockNode* blockPtr)  {
+void Set::reflectBlockAccess(BlockNode* blockPtr)
+{
     vicMan->reflectBlockAccess(blockPtr);
 }
 
-void Set::addNewBlock(BlockNode* blockPtr)  {
+void Set::addNewBlock(BlockNode* blockPtr)
+{
     BlockNode* victimPtr = vicMan->getVictim();
 
-    if(victimPtr->block->isValid())  {
-        if(victimPtr->block->isDirty())  {
+    if(victimPtr->block->isValid())
+    {
+        if(victimPtr->block->isDirty())
+        {
             writeBack(victimPtr);
         }
     }
 
     //add new block into list
-    if(victimPtr->prev != NULL)  {
+    if(victimPtr->prev != NULL)
+    {
         victimPtr->prev->next = blockPtr;
         blockPtr->prev = victimPtr->prev;
     }
-    if(victimPtr->next != NULL)  {
+    if(victimPtr->next != NULL)
+    {
         victimPtr->next->prev = blockPtr;
         blockPtr->next = victimPtr->next;
     }
@@ -385,7 +464,8 @@ void Set::addNewBlock(BlockNode* blockPtr)  {
     delete victimPtr;
 }
 
-void Set::writeBack(BlockNode* victimPtr)  {
+void Set::writeBack(BlockNode* victimPtr)
+{
     uint memAddr = victimPtr->block->getTag();
     memAddr = (memAddr << indexLength) + index;
     memAddr = (memAddr << offsetLength);
@@ -429,16 +509,21 @@ Set::Set(Memory* mR, int index, int numSets, int setSize, int blockSize, int rep
     //at this point, all blocks have been allocated, and are marked as invalid (default)
 
     //instantiate a victim manager
-    if(repPolicy == C_CRP_RANDOM)  {
+    if(repPolicy == C_CRP_RANDOM)
+    {
         vicMan = new RandomVictimManager(this);
-    }  else if(repPolicy == C_CRP_LRU)  {
+    }
+    else if(repPolicy == C_CRP_LRU)
+    {
         vicMan = new LRUVictimManager(this);
-    }  else if(repPolicy == C_CRP_TREE)  {
+    }
+    else if(repPolicy == C_CRP_TREE)
+    {
         vicMan = new TreeVictimManager(this);
     }
 }
 
-void Set::read(uint address, uint* data, uint count = 1)
+void Set::read(uint address, uint* data, uint count)
 {
     uint tag    = getTag(address);
 
@@ -486,7 +571,7 @@ void Set::read(uint address, uint* data, uint count = 1)
     fetchedBlock->block->read(address, data, count);
 }
 
-void Set::write(uint address, uint* data, uint count = 1)
+void Set::write(uint address, uint* data, uint count)
 {
     uint tag = getTag(address);
 
@@ -544,34 +629,9 @@ void Set::write(uint address, uint* data, uint count = 1)
     */
 }
 
-/*-------------------------------------------------------------------------------------------------
-*    Class Name         : Cache
-*    Application        : Used to represent the cache memory
-*    Inheritances       : Nil
--------------------------------------------------------------------------------------------------*/
-class Cache
-{
-private:
-    int numSets;   //number of sets in the cache
-    int numBlocks;  //number of blocks in the cache
-    int numWays;    //number of ways in the cache
-
-    int cacheSize;  //size of the cache
-    int blockSize;  //size of the cache block
-
-    int offsetLength;
-    
-    int repPolicy;  //replacement policy
-    Set** sets;     //pointer to represent sets
-
-    uint getIndex(uint address);
-
-public: //public functions
-    Cache(Memory* mR, int cacheSize, int blockSize, int org, int repPolicy);
-
-    void read(uint address, uint* buffer, uint count);  //reading from a required adress in cache
-    void write(uint address, uint* buffer, uint count); //writing into a given adress in cache
-};
+//////////////////////////////////////////////////////////////////////
+////////////////////      CACHE DEFINITIONS      /////////////////////
+//////////////////////////////////////////////////////////////////////
 
 Cache::Cache(Memory* mR, int cacheSize, int blockSize, int org, int repPolicy)
 {
@@ -597,7 +657,7 @@ Cache::Cache(Memory* mR, int cacheSize, int blockSize, int org, int repPolicy)
     sets = new Set*[numSets];
     for(int i = 0; i < numSets; i++)
     {
-        sets[i] = new Set(mR, numSets, numWays, blockSize, repPolicy);
+        sets[i] = new Set(mR, i, numSets, numWays, blockSize, repPolicy);
     }
 }
 
@@ -617,7 +677,6 @@ void Cache::write(uint address, uint* buffer, uint count)
     uint index = getIndex(address);
     sets[index]->write(address, buffer, count);
 }
-
 
 /*-------------------------------------------------------------------------------------------------
 *    Function Name : main
