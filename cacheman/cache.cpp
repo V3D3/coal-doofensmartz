@@ -87,6 +87,7 @@ class Cache;
 class Memory
 {
 public:
+    //reads <wordCount> words from memory into buffer[]
     void read(uint addr, uint* buffer, uint wordCount = 1);
     void write(uint addr, uint* buffer, uint wordCount = 1);
 };
@@ -99,27 +100,32 @@ public:
 class CacheBlock
 {
 private:
-    int    tag = -1;         //tag of a cache block
-    bool   dirty = false;    //a bit to indicate whether any changes are made to a block or not.
-    bool   valid = false;    //valid bit
+    int    tag = -1;         //stores tag
+    bool   dirty = false;    //any writes to block?
+    bool   valid = false;    //any reads into block?
     
     int    blockSize;
     uint*  data = NULL;      //stores data of the cacheBlock
 
+    //gets offset from an address
     uint getOffset(uint addr);
 public:
+    //constructor: inits data
     CacheBlock(int blockSize);
     
+    //getters and setters
     bool isValid();
     bool isDirty();
     
     uint getTag();
     void setTag(uint tag);
 
+    //writes <count> words into <data> from this block given the address
     void write(uint address, uint* data, uint count = 1);
     void read(uint address, uint* data, uint count = 1);
 };
 
+//adds doubly-linked-list functionality to CacheBlock
 typedef struct BlockNodest
 {
     CacheBlock*          block = NULL;
@@ -136,19 +142,23 @@ class Set
 {
 private:
     BlockNode*  head;       //head pointer of linked list of cache blocks
-    int         size;       //size is number of blocks in the cache
-    int         repPolicy;  //repPolicy is to identify replcement policy
-    int         blockSize;
-    int         validBlocks = 0;
+    int         size;       //size is number of blocks in the set
+    int         repPolicy;  //repPolicy is to identify replacement policy
+    int         blockSize; 
+    int         validBlocks = 0; //number of valid blocks in this set
 
+    //lengths of these fields in bits
     int offsetLength;
     int indexLength;
     int tagLength;
+    //index of this set
     int index;
     
+    //reference to memory, and a victim manager
     Memory* memReference;
     VictimManager* vicMan;
 
+    //get tag from address
     uint getTag(uint addr);
     //reflects block access in PLRU/LRU/others
     void reflectBlockAccess(BlockNode* blockPtr);
@@ -158,11 +168,14 @@ private:
     void writeBack(BlockNode* victimPtr);
 
 public:
+    //constructor: many functions
     Set(Memory* mR, int index, int numSets, int setSize, int blockSize, int repPolicy);
 
+    //read <count> words from address into <data[]>
     int read(uint address, uint* data, uint count = 1);
     int write(uint address, uint* data, uint count = 1);
 
+    //friends since they access the Blocks LinkedList
     friend class VictimManager;
     friend class RandomVictimManager;
     friend class LRUVictimManager;
@@ -174,45 +187,57 @@ public:
 *    Application        : Assist in tracking victims in Set
 *    Inheritances       : Nil
 -------------------------------------------------------------------------------------------------*/
-
+//base interface/abstract class
 class VictimManager
 {
 public:
+    //triggers bookkeeping for the replacement policy when a block is accessed
     virtual void reflectBlockAccess(BlockNode* accessedPtr) = 0;
+    //gets the victim block address
     virtual BlockNode* getVictim() = 0; //inclusive of invalid blocks
 };
 
+//random (counter-based, not random in the exact sense)
+//advantage: no need to check block validity
 class RandomVictimManager : public VictimManager
 {
 private:
-    uint counter = 0;
-    Set* setRef = NULL;
+    uint counter = 0;   //iterates across block linked list
+    Set* setRef = NULL; //refers to original set
 public:
     RandomVictimManager(Set* sR);
-    //nothing to reflect
+
+    //nothing to reflect here
     void reflectBlockAccess(BlockNode* accessedPtr)  {}
     BlockNode* getVictim();
 };
 
+//least recently used: brings accessed block to head
+//evicted: last block
 class LRUVictimManager : public VictimManager
 {
 private:
     Set* setRef = NULL;
 public:
     LRUVictimManager(Set* sR);
+
     void reflectBlockAccess(BlockNode* accessedPtr);
     BlockNode* getVictim();
 };
 
+//tree-based psuedo-lru: uses a complete binary tree
 class TreeVictimManager : public VictimManager
 {
 private:
+    //a bool array representing the tree
     bool* tree = NULL;
     Set* setRef = NULL;
 
+    //needed for tree implementation
     uint setSize;
 public:
     TreeVictimManager(Set* sR);
+
     void reflectBlockAccess(BlockNode* accessedPtr);
     BlockNode* getVictim();
 };
@@ -220,32 +245,37 @@ public:
 
 /*-------------------------------------------------------------------------------------------------
 *    Class Name         : Cache
-*    Application        : Used to represent the cache memory
+*    Application        : Used to represent the cache
 *    Inheritances       : Nil
 -------------------------------------------------------------------------------------------------*/
 class Cache
 {
 private:
     int numSets;   //number of sets in the cache
-    int numBlocks;  //number of blocks in the cache
     int numWays;    //number of ways in the cache
+    int numBlocks;  //number of blocks in the cache
 
-    int cacheSize;  //size of the cache
-    int blockSize;  //size of the cache block
+    int cacheSize;  //size of the cache (words)
+    int blockSize;  //size of the cache block (words)
 
+    //length of the offset field in bits in an address
     int offsetLength;
     
     int repPolicy;  //replacement policy
     Set** sets;     //pointer to represent sets
 
+    //gets an index from an address
     uint getIndex(uint address);
 
+    //stores the accessed addresses from cache
+    //useful to determine compulsory misses
     std::set<int, std::greater<int>> stat_addr_queried;
 public:
     Cache(Memory* mR, int cacheSize, int blockSize, int org, int repPolicy);
 
-    void read(uint address, uint* buffer, uint count = 1);  //reading from a required adress in cache
-    void write(uint address, uint* buffer, uint count = 1); //writing into a given adress in cache
+    //read <count> words from <address> into <buffer[]>
+    void read(uint address, uint* buffer, uint count = 1);
+    void write(uint address, uint* buffer, uint count = 1);
 
     //statistics
     int stat_cache_read = 0;
@@ -288,15 +318,19 @@ void Memory::write(uint addr, uint* buffer, uint wordCount)
 
 CacheBlock::CacheBlock(int blockSize)
 {
-    this->blockSize = blockSize;    //getting values into struct variables
-    this->data      = new uint[blockSize];   //the data of cache according to block
+    //absorb param and allocate memory for data
+    this->blockSize = blockSize;
+    this->data      = new uint[blockSize];
 }
 
+//gets offset from address
 uint CacheBlock::getOffset(uint addr)
 {
+    //gets last bits
     return addr & (blockSize - 1);
 }
 
+//getters and setters
 bool CacheBlock::isValid()          {return valid;}
 bool CacheBlock::isDirty()          {return dirty;}
 uint CacheBlock::getTag()           {return tag;}
@@ -306,12 +340,15 @@ void CacheBlock::write(uint address, uint* data, uint count)
 {
     uint offset = getOffset(address);
 
-    assert(count < blockSize);
-    assert(offset + count < blockSize);
+    assert(count <= blockSize);
+    assert(offset + count <= blockSize);
 
+    //first write: valid false => dirty false (getting from memory into block)
+    //second write: dirty: true
     dirty = valid;
     valid = true;
-    
+
+    //write data into the block, from given data[]   
     for(int i = 0; i < count; i++)
     {
         this->data[offset + i] = data[i];
@@ -322,10 +359,16 @@ void CacheBlock::read(uint address, uint* data, uint count)
 {
     uint offset = getOffset(address);
 
+    //block must be valid to be read from
+
+    //these are just for correctness of code, validity is checked before
+    // a read is requested
+
     assert(valid);
-    assert(count < blockSize);
-    assert(offset + count < blockSize);
+    assert(count <= blockSize);
+    assert(offset + count <= blockSize);
     
+    //read from this block into data[]
     for(int i = 0; i < count; i++)
     {
         data[i] = this->data[offset + i];
@@ -336,6 +379,7 @@ void CacheBlock::read(uint address, uint* data, uint count)
 ////////////////      VICTIM MANAGER DEFINITIONS      ////////////////
 //////////////////////////////////////////////////////////////////////
 
+//constructor: get reference to set
 RandomVictimManager::RandomVictimManager(Set* sR)
 {
     this->setRef = sR;
@@ -343,7 +387,11 @@ RandomVictimManager::RandomVictimManager(Set* sR)
 
 BlockNode* RandomVictimManager::getVictim()
 {
+    //counter points to current empty location
+    //when set has invalid blocks, else to a valid block
+    //copy counter
     uint t = counter;
+
     counter = (counter + 1) % setRef->size;;
     
     BlockNode* tmp = setRef->head;
@@ -597,8 +645,10 @@ int Set::read(uint address, uint* data, uint count)
     //read required location into it
     uint* buffer = new uint[blockSize];
     
-    memReference->read(address, buffer, blockSize);
-    fetchedBlock->block->write(address, buffer, blockSize);
+    uint readaddr = (address / blockSize) * blockSize;
+
+    memReference->read(readaddr, buffer, blockSize);
+    fetchedBlock->block->write(readaddr, buffer, blockSize);
 
     //read data into given buffer
     fetchedBlock->block->read(address, data, count);
@@ -645,8 +695,12 @@ int Set::write(uint address, uint* data, uint count)
     //read from memory into it first*
     uint* buffer = new uint[blockSize];
 
-    memReference->read(address, buffer, blockSize);
-    fetchedBlock->block->write(address, buffer, blockSize);
+    //make offset 0 to get block
+    uint readaddr = (address / blockSize) * blockSize;
+
+    //get block
+    memReference->read(readaddr, buffer, blockSize);
+    fetchedBlock->block->write(readaddr, buffer, blockSize);
 
     //write into it
     fetchedBlock->block->write(address, data, count);
