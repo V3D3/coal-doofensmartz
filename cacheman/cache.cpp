@@ -792,10 +792,10 @@ int main()
     {
         fileObj >> command;
         if(command == 'r')
-            L1.read(std::stoi(hexCode,0,16) &buffer,0);
+            L1.read(std::stoi(hexCode,0,16) &buffer);
 
         else if(command == 'w')
-            L1.write(std::stoi(hexCode,0,16), &buffer,0);
+            L1.write(std::stoi(hexCode,0,16), &buffer);
     }
 
     std::cout << L1.stat_cache_miss_compulsory << std::endl;
