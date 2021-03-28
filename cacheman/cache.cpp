@@ -691,14 +691,15 @@ int main()
     int cacheSize, blockSize, org, repPolicy;   //parameters required to define the cache
     char command;
     uint buffer;
-    Memory* MainMem;
-
-    std::ifstream fileObj;       //ofstream class object for the file Handling   //inputfile
     std::string hexCode;   //hexcode for request and address
+    std::string filename;
 
-    fileObj.open("input.txt", std::ios::in); //opens a file for reading
+    std::cin >> cacheSize >> blockSize >> org >> repPolicy;  //cache parameters
+    std::cin >> filename;
+    std::ifstream fileObj;       //ofstream class object for the file Handling
+    fileObj.open(filename, std::ios::in); //opens a file for reading
 
-    fileObj >> cacheSize >> blockSize >> org >> repPolicy;  //cache parameters
+    Memory* MainMem;
     Cache L1(MainMem,cacheSize, blockSize, org, repPolicy); //creating a cache object
 
     while(fileObj >> hexCode)   //while EOF is not reached
