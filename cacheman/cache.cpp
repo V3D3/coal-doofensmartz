@@ -392,14 +392,17 @@ BlockNode* RandomVictimManager::getVictim()
     //copy counter
     uint t = counter;
 
+    //increment counter
     counter = (counter + 1) % setRef->size;;
     
+    //traverse linked list to invalid/victim location
     BlockNode* tmp = setRef->head;
     while(t > 0)  {
         tmp = tmp->next;
         t--;
     }
 
+    //return the node's address
     return tmp;
 }
 
@@ -410,6 +413,7 @@ LRUVictimManager::LRUVictimManager(Set* sR)
 
 void LRUVictimManager::reflectBlockAccess(BlockNode* accessedPtr)
 {
+    //store current head
     BlockNode* tmp = setRef->head;
 
     //remove accessed block from middle of set
@@ -427,6 +431,7 @@ void LRUVictimManager::reflectBlockAccess(BlockNode* accessedPtr)
 
 BlockNode* LRUVictimManager::getVictim()
 {
+    //get last node
     BlockNode* tmp = setRef->head;
     while(tmp->next != NULL)
     {
@@ -511,9 +516,12 @@ void Set::reflectBlockAccess(BlockNode* blockPtr)
 
 int Set::addNewBlock(BlockNode* blockPtr)
 {
-    int hitstatus;
+    int hitstatus; //for stats
+
+    //get victim ptr
     BlockNode* victimPtr = vicMan->getVictim();
 
+    //check if it is valid, report accordingly
     bool valid = victimPtr->block->isValid();
 
     hitstatus = C_MISS_INV;
@@ -551,10 +559,12 @@ int Set::addNewBlock(BlockNode* blockPtr)
 
 void Set::writeBack(BlockNode* victimPtr)
 {
+    //compute address in memory
     uint memAddr = victimPtr->block->getTag();
     memAddr = (memAddr << indexLength) + index;
     memAddr = (memAddr << offsetLength);
 
+    //write the block into memory
     uint* buffer = new uint[blockSize];
     victimPtr->block->read(0, buffer, blockSize);
     memReference->write(memAddr, buffer, blockSize);
@@ -766,6 +776,7 @@ void Cache::read(uint address, uint* buffer, uint count)
     stat_cache_access++;
     stat_cache_read++;
 
+    //these two lines are actual read, others are for stats
     uint index = getIndex(address);
     int hitstatus = sets[index]->read(address, buffer, count);
 
