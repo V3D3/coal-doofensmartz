@@ -7,14 +7,6 @@
 *    Question : CS2610 A6
 -------------------------------------------------------------------------------------------------*/
 
-/*
-    progress (+ implemented ~ current - left)
-        + memory
-        + block
-        ~ set
-        - cache
-*/
-
 typedef unsigned int uint;
 
 // Cache Replacement Policies
@@ -107,11 +99,7 @@ private:
 
     uint getOffset(uint addr);
 public:
-    CacheBlock(int blockSize)
-    {
-        this->blockSize = blockSize;    //getting values into struct variables
-        this->data      = new uint[blockSize];   //the data of cache according to block
-    }
+    CacheBlock(int blockSize);
     
     bool isValid();
     bool isDirty();
@@ -126,8 +114,16 @@ public:
 typedef struct BlockNodest
 {
     CacheBlock*          block = NULL;
+    struct BlockNodest*  prev  = NULL;
     struct BlockNodest*  next  = NULL;
 }  BlockNode;
+
+
+CacheBlock::CacheBlock(int blockSize)
+{
+    this->blockSize = blockSize;    //getting values into struct variables
+    this->data      = new uint[blockSize];   //the data of cache according to block
+}
 
 uint CacheBlock::getOffset(uint addr)
 {
@@ -175,6 +171,147 @@ void CacheBlock::read(uint address, uint* data, uint count = 1)
     }
 }
 
+class VictimManager
+{
+public:
+    virtual void reflectBlockAccess(BlockNode* accessedPtr);
+    virtual BlockNode* getVictim(); //inclusive of invalid blocks
+};
+
+class RandomVictimManager : VictimManager
+{
+private:
+    uint counter = 0;
+    Set* setRef = NULL;
+public:
+    RandomVictimManager(Set* sR);
+    //nothing to reflect
+    void reflectBlockAccess(BlockNode* accessedPtr)  {}
+    BlockNode* getVictim();
+};
+
+RandomVictimManager::RandomVictimManager(Set* sR)  {
+    this->setRef = sR;
+}
+
+BlockNode* RandomVictimManager::getVictim()  {
+    uint t = counter;
+    counter = (counter + 1) % setRef->size;;
+    
+    BlockNode* tmp = setRef->head;
+    while(t > 0)  {
+        tmp = tmp->next;
+        t--;
+    }
+
+    return tmp;
+}
+
+class LRUVictimManager : VictimManager
+{
+private:
+    Set* setRef = NULL;
+public:
+    LRUVictimManager(Set* sR);
+    void reflectBlockAccess(BlockNode* accessedPtr);
+    BlockNode* getVictim();
+};
+
+LRUVictimManager::LRUVictimManager(Set* sR)  {
+    this->setRef = sR;
+}
+
+void LRUVictimManager::reflectBlockAccess(BlockNode* accessedPtr)  {
+    BlockNode* tmp = setRef->head;
+
+    //remove accessed block from middle of set
+    accessedPtr->prev->next = accessedPtr->next;
+    accessedPtr->next->prev = accessedPtr->prev;
+
+    //make it the head
+    setRef->head = accessedPtr;
+    accessedPtr->prev = NULL;
+
+    //add the rest of the list to the end of the new head
+    setRef->head->next = tmp;
+    tmp->prev = setRef->head;
+}
+
+BlockNode* LRUVictimManager::getVictim()  {
+    BlockNode* tmp = setRef->head;
+    while(tmp->next != NULL)  {
+        tmp = tmp->next;
+    }
+
+    return tmp;
+}
+
+class TreeVictimManager : VictimManager
+{
+private:
+    bool* tree = NULL;
+    Set* setRef = NULL;
+
+    uint setSize;
+public:
+    TreeVictimManager(Set* sR);
+    void reflectBlockAccess(BlockNode* accessedPtr);
+    BlockNode* getVictim();
+};
+
+TreeVictimManager::TreeVictimManager(Set* sR)  {
+    this->setRef = sR;
+    this->setSize = setRef->size;
+
+    //() : all init to false
+    tree = new bool[setSize - 1]();
+}
+
+void TreeVictimManager::reflectBlockAccess(BlockNode* accessedPtr)
+{
+    //intent: make bits in the path to root point away
+
+    //get index of accessedPtr in list
+    uint index = 0;
+    while(accessedPtr->prev != NULL)  {
+        index++;
+        accessedPtr = accessedPtr->prev;
+    }
+
+    //adjusted for 0-based indexing
+    int curr = index + setSize - 1; //issue: curr is int here
+    while(curr > -1)  {
+        //make the parent bit point away
+        tree[(curr - 1) / 2] = (curr % 2);
+        //go to parent bit
+        curr = (curr - 1) / 2;
+    }
+}
+
+BlockNode* TreeVictimManager::getVictim()  {
+    //adjusted for 0-based indexing
+    uint curr = 0;
+
+    while(curr < setSize - 1)  {
+        //go to child according to current bit
+        curr = (2 * curr) + tree[curr] + 1;
+
+        //invert the bit (/2 to go back up)
+        tree[(curr - 1) / 2] = !tree[(curr - 1) / 2];
+    }
+
+    curr = curr - setSize + 1;
+
+    //at this point, curr points to index of victim in set
+    BlockNode* temp = setRef->head;
+    while(curr > 0)  {
+        temp = temp->next;
+        curr--;
+    }
+
+    return temp;
+}
+
 /*-------------------------------------------------------------------------------------------------
 *    Class Name         : Set
 *    Application        : Used to represent a set of blocks
@@ -187,10 +324,12 @@ private:
     int         size;       //size is number of blocks in the cache
     int         repPolicy;  //repPolicy is to identify replcement policy
     int         blockSize;
+    int         validBlocks = 0;
 
     int offsetLength;
     int indexLength;
     int tagLength;
+    int index;
     
     Memory* memReference;
 
@@ -203,41 +342,50 @@ private:
     void writeBack(BlockNode* victimPtr);
 
 public:
-    Set(Memory* mR, int numSets, int setSize, int blockSize, int repPolicy)
-    {
-        //absorb params
-        this->memReference = mR;
-        
-        this->size = setSize;
-        this->blockSize = blockSize;
-
-        this->repPolicy = repPolicy;
-
-        //calculate addr fields' lengths
-        offsetLength = log2(blockSize);
-        indexLength = log2(numSets);
-        tagLength = C_ADDR_LEN - (offsetLength + indexLength);
-
-        //allocate blocks
-        this->head = new BlockNode(); 
-        this->head->block = new CacheBlock(blockSize);
-
-        BlockNode* temp = this->head;
-
-        for(int i = 1; i < setSize; i++)
-        {
-            temp->next = new BlockNode();
-            temp->next->block = new CacheBlock(blockSize);
-
-            temp = temp->next;
-        }
-
-        //at this point, all blocks have been allocated, and are marked as invalid (default)
-    }
+    Set(Memory* mR, int index, int numSets, int setSize, int blockSize, int repPolicy);
 
     void read(uint address, uint* data, uint count = 1);
     void write(uint address, uint* data, uint count = 1);
+
+    friend class VictimManager;
+    friend class RandomVictimManager;
+    friend class LRUVictimManager;
+    friend class TreeVictimManager;
 };
+
+Set::Set(Memory* mR, int index, int numSets, int setSize, int blockSize, int repPolicy)
+{
+    //absorb params
+    this->memReference = mR;
+    this->index = index;
+    
+    this->size = setSize;
+    this->blockSize = blockSize;
+
+    this->repPolicy = repPolicy;
+
+    //calculate addr fields' lengths
+    offsetLength = log2(blockSize);
+    indexLength = log2(numSets);
+    tagLength = C_ADDR_LEN - (offsetLength + indexLength);
+
+    //allocate blocks
+    this->head = new BlockNode(); 
+    this->head->block = new CacheBlock(blockSize);
+
+    BlockNode* temp = this->head;
+
+    for(int i = 1; i < setSize; i++)
+    {
+        temp->next = new BlockNode();
+        temp->next->block = new CacheBlock(blockSize);
+        temp->next->prev = temp;
+
+        temp = temp->next;
+    }
+
+    //at this point, all blocks have been allocated, and are marked as invalid (default)
+}
 
 uint Set::getTag(uint addr)
 {
@@ -373,37 +521,39 @@ private:
     uint getIndex(uint address);
 
 public: //public functions
-    Cache(Memory* mR, int cacheSize, int blockSize, int org, int repPolicy)
-    {
-        //absorb params
-        this->cacheSize = cacheSize;
-        this->blockSize = blockSize;
-
-        this->numBlocks = cacheSize / blockSize;
-        this->repPolicy = repPolicy;
-
-        //set associativity
-        if(org == 0)
-        {
-            org = this->numBlocks;
-        }
-        this->numSets = (this->numBlocks) / org;
-        this->numWays = numBlocks / numSets;
-        
-        //calculate address field lengths
-        offsetLength = log2(blockSize);
-
-        //allocating required memory for sets
-        sets = new Set*[numSets];
-        for(int i = 0; i < numSets; i++)
-        {
-            sets[i] = new Set(mR, numSets, numWays, blockSize, repPolicy);
-        }
-    }
+    Cache(Memory* mR, int cacheSize, int blockSize, int org, int repPolicy);
 
     void read(uint address, uint* buffer, uint count);  //reading from a required adress in cache
     void write(uint address, uint* buffer, uint count); //writing into a given adress in cache
 };
+
+Cache::Cache(Memory* mR, int cacheSize, int blockSize, int org, int repPolicy)
+{
+    //absorb params
+    this->cacheSize = cacheSize;
+    this->blockSize = blockSize;
+
+    this->numBlocks = cacheSize / blockSize;
+    this->repPolicy = repPolicy;
+
+    //set associativity
+    if(org == 0)
+    {
+        org = this->numBlocks;
+    }
+    this->numSets = (this->numBlocks) / org;
+    this->numWays = numBlocks / numSets;
+    
+    //calculate address field lengths
+    offsetLength = log2(blockSize);
+
+    //allocating required memory for sets
+    sets = new Set*[numSets];
+    for(int i = 0; i < numSets; i++)
+    {
+        sets[i] = new Set(mR, numSets, numWays, blockSize, repPolicy);
+    }
+}
 
 uint Cache::getIndex(uint address)
 {
