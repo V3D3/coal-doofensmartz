@@ -790,7 +790,7 @@ int main()
 
     while(fileObj >> hexCode)   //while EOF is not reached
     {
-        std::cin >> command;
+        fileObj >> command;
         if(command == 'r')
             L1.read(std::stoi(hexCode,0,16) &buffer,0);
 
