@@ -3,6 +3,7 @@
 #include <cassert>
 #include <iterator>
 #include <set>
+#include <cstring>
 
 /*-------------------------------------------------------------------------------------------------
 *    Author   : Team DOOFENSMARTZ
@@ -776,31 +777,33 @@ int main()
     int cacheSize, blockSize, org, repPolicy;   //parameters required to define the cache
     char command;
     uint buffer;
+    std::string hexCode;   //hexcode for request and address
+    std::string filename;
 
-    ifstream fileObj;       //ofstream class object for the file Handling   //inputfile
-    uint hexCode;   //hexcode for request and address
+    std::cin >> cacheSize >> blockSize >> org >> repPolicy;  //cache parameters
+    std::cin >> filename;
+    std::ifstream fileObj;       //ofstream class object for the file Handling
+    fileObj.open(filename, std::ios::in); //opens a file for reading
 
-    fileObj.open("input.txt", ios::in); //opens a file for reading
-
-    fileObj >> cacheSize >> blocksize >> org >> repPolicy;  //cache parameters
-    cache L1(cacheSize, blockSize, org, repPolicy); //creating a cache object
+    Memory* MainMem;
+    Cache L1(MainMem,cacheSize, blockSize, org, repPolicy); //creating a cache object
 
     while(fileObj >> hexCode)   //while EOF is not reached
     {
         std::cin >> command;
-        if(command == 'w')
-            L1.read(hexCode, &buffer);
+        if(command == 'r')
+            L1.read(std::stoi(hexCode,0,16) &buffer,0);
 
         else if(command == 'w')
-            L1.write(hexCode, &buffer);
+            L1.write(std::stoi(hexCode,0,16), &buffer,0);
     }
 
-    std::cout << L1.compMiss << std::endl;
+    /*std::cout << L1.compMiss << std::endl;
     std::cout << L1.capMiss << std::endl;
     std::cout << L1.confMiss << std::endl;
     std::cout << L1.readMiss << std::endl;
     std::cout << L1.writeMiss << std::endl;
-    std::cout << L1.dirtEvic << std::endl;
+    std::cout << L1.dirtEvic << std::endl;*/
     
     fileObj.close();    //closing the inputfile
     return 0;   //succesful run of the code
