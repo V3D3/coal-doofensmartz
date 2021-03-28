@@ -835,29 +835,29 @@ int main()
     std::string filename;
 
     std::cin >> cacheSize >> blockSize >> org >> repPolicy;  //cache parameters
-    std::cin >> filename;
+    std::cin >> filename;   //taking input for the filename
     std::ifstream fileObj;       //ofstream class object for the file Handling
     fileObj.open(filename, std::ios::in); //opens a file for reading
 
-    Memory* MainMem;
+    Memory* MainMem = new Memory(); //creating a main memory object
     Cache L1(MainMem,cacheSize, blockSize, org, repPolicy); //creating a cache object
 
     while(fileObj >> hexCode)   //while EOF is not reached
     {
-        std::cin >> command;
+        fileObj >> command;
         if(command == 'r')
-            L1.read(std::stoi(hexCode,0,16) &buffer,0);
+            L1.read(std::stoi(hexCode,0,16) &buffer);
 
         else if(command == 'w')
-            L1.write(std::stoi(hexCode,0,16), &buffer,0);
+            L1.write(std::stoi(hexCode,0,16), &buffer);
     }
 
-    /*std::cout << L1.compMiss << std::endl;
-    std::cout << L1.capMiss << std::endl;
-    std::cout << L1.confMiss << std::endl;
-    std::cout << L1.readMiss << std::endl;
-    std::cout << L1.writeMiss << std::endl;
-    std::cout << L1.dirtEvic << std::endl;*/
+    std::cout << L1.stat_cache_miss_compulsory << std::endl;
+    std::cout << L1.stat_cache_miss_capacity << std::endl;
+    std::cout << L1.stat_cache_miss_conflict << std::endl;
+    std::cout << L1.stat_cache_miss_read << std::endl;
+    std::cout << L1.stat_cache_miss_write << std::endl;
+    std::cout << L1.stat_cache_dirty_evicted << std::endl;
     
     fileObj.close();    //closing the inputfile
     return 0;   //succesful run of the code
