@@ -88,8 +88,8 @@ class Memory
 {
 public:
     //reads <wordCount> words from memory into buffer[]
-    void read(uint addr, uint* buffer, uint wordCount = 1);
-    void write(uint addr, uint* buffer, uint wordCount = 1);
+    void read(uint addr, word* buffer, uint wordCount = 1);
+    void write(uint addr, word* buffer, uint wordCount = 1);
 };
 
 /*-------------------------------------------------------------------------------------------------
@@ -105,7 +105,7 @@ private:
     bool   valid = false;    //any reads into block?
     
     int    blockSize;
-    uint*  data = NULL;      //stores data of the cacheBlock
+    word*  data = NULL;      //stores data of the cacheBlock
 
     //gets offset from an address
     uint getOffset(uint addr);
@@ -121,8 +121,8 @@ public:
     void setTag(uint tag);
 
     //writes <count> words into <data> from this block given the address
-    void write(uint address, uint* data, uint count = 1);
-    void read(uint address, uint* data, uint count = 1);
+    void write(uint address, word* data, uint count = 1);
+    void read(uint address, word* data, uint count = 1);
 };
 
 //adds doubly-linked-list functionality to CacheBlock
@@ -173,8 +173,8 @@ public:
     uint getTag(uint addr);
 
     //read <count> words from address into <data[]>
-    int read(uint address, uint* data, uint count = 1);
-    int write(uint address, uint* data, uint count = 1);
+    int read(uint address, word* data, uint count = 1);
+    int write(uint address, word* data, uint count = 1);
 
     bool isFull();
     //stores the accessed addresses from cache
@@ -276,8 +276,8 @@ public:
     Cache(Memory* mR, int cacheSize, int blockSize, int org, int repPolicy);
 
     //read <count> words from <address> into <buffer[]>
-    void read(uint address, uint* buffer, uint count = 1);
-    void write(uint address, uint* buffer, uint count = 1);
+    void read(uint address, word* buffer, uint count = 1);
+    void write(uint address, word* buffer, uint count = 1);
     bool isFull();
     //statistics
     int stat_cache_read = 0;
@@ -300,7 +300,7 @@ public:
 /////////////////////     MEMORY DEFINITIONS     /////////////////////
 //////////////////////////////////////////////////////////////////////
 
-void Memory::read(uint addr, uint* buffer, uint wordCount)
+void Memory::read(uint addr, word* buffer, uint wordCount)
 {
     //dummy memory, does nothing
     for(uint i = 0; i < wordCount; i++)
@@ -309,7 +309,7 @@ void Memory::read(uint addr, uint* buffer, uint wordCount)
     }
 }
 
-void Memory::write(uint addr, uint* buffer, uint wordCount)
+void Memory::write(uint addr, word* buffer, uint wordCount)
 {
     //does absolutely nothing
 }
@@ -322,7 +322,7 @@ CacheBlock::CacheBlock(int blockSize)
 {
     //absorb param and allocate memory for data
     this->blockSize = blockSize;
-    this->data      = new uint[blockSize];
+    this->data      = new word[blockSize];
 }
 
 //gets offset from address
@@ -338,7 +338,7 @@ bool CacheBlock::isDirty()          {return dirty;}
 uint CacheBlock::getTag()           {return tag;}
 void CacheBlock::setTag(uint tag)   {this->tag = tag;}
 
-void CacheBlock::write(uint address, uint* data, uint count)
+void CacheBlock::write(uint address, word* data, uint count)
 {
     uint offset = getOffset(address);
 
@@ -357,7 +357,7 @@ void CacheBlock::write(uint address, uint* data, uint count)
     }
 }
 
-void CacheBlock::read(uint address, uint* data, uint count)
+void CacheBlock::read(uint address, word* data, uint count)
 {
     uint offset = getOffset(address);
 
@@ -566,7 +566,7 @@ void Set::writeBack(BlockNode* victimPtr)
     memAddr = (memAddr << indexLength) + index;
     memAddr = (memAddr << offsetLength);
 
-    uint* buffer = new uint[blockSize];
+    word* buffer = new word[blockSize];
     victimPtr->block->read(0, buffer, blockSize);
     memReference->write(memAddr, buffer, blockSize);
 }
@@ -626,7 +626,7 @@ Set::Set(Memory* mR, int index, int numSets, int setSize, int blockSize, int rep
     }
 }
 
-int Set::read(uint address, uint* data, uint count)
+int Set::read(uint address, word* data, uint count)
 {
     uint tag = getTag(address);
 
@@ -661,7 +661,7 @@ int Set::read(uint address, uint* data, uint count)
     fetchedBlock->block = new CacheBlock(blockSize);
 
     //read required location into it
-    uint* buffer = new uint[blockSize];
+    word* buffer = new word[blockSize];
     
     uint readaddr = (address / blockSize) * blockSize;
 
@@ -677,7 +677,7 @@ int Set::read(uint address, uint* data, uint count)
     return addNewBlock(fetchedBlock);
 }
 
-int Set::write(uint address, uint* data, uint count)
+int Set::write(uint address, word* data, uint count)
 {
     uint tag = getTag(address);
 
@@ -712,7 +712,7 @@ int Set::write(uint address, uint* data, uint count)
     fetchedBlock->block = new CacheBlock(blockSize);
 
     //read from memory into it first*
-    uint* buffer = new uint[blockSize];
+    word* buffer = new word[blockSize];
 
     //make offset 0 to get block
     uint readaddr = (address / blockSize) * blockSize;
@@ -789,7 +789,7 @@ bool Cache::isFull(){
     }
     return true;
 }
-void Cache::read(uint address, uint* buffer, uint count)
+void Cache::read(uint address, word* buffer, uint count)
 {
     stat_cache_access++;
     stat_cache_read++;
@@ -830,7 +830,7 @@ void Cache::read(uint address, uint* buffer, uint count)
         }
 }
 
-void Cache::write(uint address, uint* buffer, uint count)
+void Cache::write(uint address, word* buffer, uint count)
 {
     stat_cache_access++;
     stat_cache_write++;
@@ -882,7 +882,7 @@ int main()
     std::cout << "Cache Simulator" << std::endl;
     int cacheSize, blockSize, org, repPolicy;   //parameters required to define the cache
     char command;
-    uint buffer;
+    word buffer;
     std::string hexCode;   //hexcode for request and address
     std::string filename;
 
