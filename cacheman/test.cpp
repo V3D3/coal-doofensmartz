@@ -176,7 +176,9 @@ public:
     int read(uint address, word* data, uint count = 1);
     int write(uint address, word* data, uint count = 1);
 
+    //Checks if the cache has been filled
     bool isFull();
+
     //stores the accessed addresses from cache
     //useful to determine compulsory misses
     std::set<int, std::greater<int>> stat_addr_queried;
@@ -278,7 +280,10 @@ public:
     //read <count> words from <address> into <buffer[]>
     void read(uint address, word* buffer, uint count = 1);
     void write(uint address, word* buffer, uint count = 1);
+
+    //Checks whether the entire cache is filled
     bool isFull();
+
     //statistics
     int stat_cache_read = 0;
     int stat_cache_write = 0;
@@ -410,6 +415,7 @@ LRUVictimManager::LRUVictimManager(Set* sR)
     this->setRef = sR;
 }
 
+//Moves block to the start of the set from its position
 void LRUVictimManager::reflectBlockAccess(BlockNode* accessedPtr)
 {
     BlockNode* tmp = setRef->head;
@@ -426,6 +432,7 @@ void LRUVictimManager::reflectBlockAccess(BlockNode* accessedPtr)
         accessedPtr->next->prev = accessedPtr->prev;
     }
 
+    //Put accessed block at the start of the set
     accessedPtr->next = setRef->head;
     setRef->head->prev = accessedPtr;
     accessedPtr->prev = NULL;
@@ -433,9 +440,12 @@ void LRUVictimManager::reflectBlockAccess(BlockNode* accessedPtr)
 
 }
 
+//Points to the victim to be populated
 BlockNode* LRUVictimManager::getVictim()
 {
     BlockNode* tmp = setRef->head;
+    //Returns the first invalid block,if exists
+    //else return last block as the victim
     while(tmp->next != NULL)
     {
         if(!(tmp->block->isValid()))
@@ -477,6 +487,7 @@ void TreeVictimManager::reflectBlockAccess(BlockNode* accessedPtr)
     }
 }
 
+//Finds the victim to be populated
 BlockNode* TreeVictimManager::getVictim()
 {
     //adjusted for 0-based indexing
@@ -537,6 +548,7 @@ int Set::addNewBlock(BlockNode* blockPtr)
     {
         validBlocks++;
     }
+    //Replace victim ptr's block with blockptr's block
     if(victimPtr->prev != NULL)
     {
         victimPtr->prev->next = blockPtr;
@@ -552,11 +564,11 @@ int Set::addNewBlock(BlockNode* blockPtr)
         blockPtr->next = victimPtr->next;
 
     }
+    //Reposition block/modify tree based on repl policy
     reflectBlockAccess(blockPtr);
 
-    //get rid of the victim block
-    //delete victimPtr;
-
+    //Delete the victim block
+    delete(victimPtr);
     return hitstatus;
 }
 
@@ -796,38 +808,39 @@ void Cache::read(uint address, word* buffer, uint count)
     bool temp = false;
     uint index = getIndex(address);
     uint tag = sets[index]->getTag(address);
-    int hitstatus = sets[index]->read(address, buffer, count);
+    int hitstatus = sets[index]->read(address, buffer, count);//Get hitstatus after read
 
+    //Check if tag has been previously accessed, add it otherwise, calc compulsory misses
     if(sets[index]->stat_addr_queried.find(tag) == sets[index]->stat_addr_queried.end())  {
         sets[index]->stat_addr_queried.insert(tag);
         stat_cache_miss_compulsory++;
         temp = true;
     }
-        if(hitstatus != C_HIT)  {
-            stat_cache_miss++;
-            stat_cache_miss_read++;
-            if(numSets == 1)  {
-                if(hitstatus != C_MISS_INV)  { //fully assoc
-                    stat_cache_miss_capacity++;
-                }
+    if(hitstatus != C_HIT)  {   //If miss is encountered
+        stat_cache_miss++;
+        stat_cache_miss_read++;
+        if(numSets == 1)  { //for fully assoc
+            if(hitstatus != C_MISS_INV)  {
+                stat_cache_miss_capacity++;
+            }
+            if(hitstatus == C_MISS_DIR)  {
+                stat_cache_dirty_evicted++;
+            }
+        }
+        if(numSets != 1)  {
+            if(hitstatus != C_MISS_INV)  {
                 if(hitstatus == C_MISS_DIR)  {
                     stat_cache_dirty_evicted++;
                 }
-            }
-            if(numSets != 1)  {
-                if(hitstatus != C_MISS_INV)  {
-                    if(hitstatus == C_MISS_DIR)  {
-                        stat_cache_dirty_evicted++;
-                    }
-                    if((this->isFull()))  {
-                        stat_cache_miss_capacity++;   
-                    }
-                    else if(!temp)  {
-                        stat_cache_miss_conflict++;
-                    }
+                if((this->isFull()))  {
+                    stat_cache_miss_capacity++;   
+                }
+                else if(!temp)  {   //Inc conflict misses,if not a cold/capacity miss
+                    stat_cache_miss_conflict++;
                 }
             }
         }
+    }
 }
 
 void Cache::write(uint address, word* buffer, uint count)
@@ -837,38 +850,39 @@ void Cache::write(uint address, word* buffer, uint count)
     bool temp = false;
     uint index = getIndex(address);
     uint tag = sets[index]->getTag(address);
-    int hitstatus = sets[index]->write(address, buffer, count);
+    int hitstatus = sets[index]->write(address, buffer, count);//Get hitstatus after read
 
+    //Check if tag has been previously accessed, add it otherwise, calc compulsory misses
     if(sets[index]->stat_addr_queried.find(tag) == sets[index]->stat_addr_queried.end())  {
         sets[index]->stat_addr_queried.insert(tag);
         stat_cache_miss_compulsory++;
         temp = true;
     }
-        if(hitstatus != C_HIT)  {
-            stat_cache_miss++;
-            stat_cache_miss_write++;
-            if(numSets == 1)  {
-                if(hitstatus != C_MISS_INV)  { //fully assoc
-                    stat_cache_miss_capacity++;
-                }
+    if(hitstatus != C_HIT)  {  //If miss is encountered
+        stat_cache_miss++;
+        stat_cache_miss_write++;
+        if(numSets == 1)  {     //for fully assoc
+            if(hitstatus != C_MISS_INV)  { 
+                stat_cache_miss_capacity++;
+            }
+            if(hitstatus == C_MISS_DIR)  {
+                stat_cache_dirty_evicted++;
+            }
+        }
+        if(numSets != 1)  {
+            if(hitstatus != C_MISS_INV)  {
                 if(hitstatus == C_MISS_DIR)  {
                     stat_cache_dirty_evicted++;
                 }
-            }
-            if(numSets != 1)  {
-                if(hitstatus != C_MISS_INV)  {
-                    if(hitstatus == C_MISS_DIR)  {
-                        stat_cache_dirty_evicted++;
-                    }
-                    if((this->isFull()))  {
-                        stat_cache_miss_capacity++;   
-                    }
-                    else if(!temp)  {
-                        stat_cache_miss_conflict++;
-                    }
+                if((this->isFull()))  {
+                    stat_cache_miss_capacity++;   
+                }
+                else if(!temp)  {   //Inc conflict misses,if not a cold/capacity miss
+                    stat_cache_miss_conflict++;
                 }
             }
         }
+    }
 }
 
 /*-------------------------------------------------------------------------------------------------
