@@ -416,9 +416,14 @@ void LRUVictimManager::reflectBlockAccess(BlockNode* accessedPtr)
     //store current head
     BlockNode* tmp = setRef->head;
 
+
     //remove accessed block from middle of set
-    accessedPtr->prev->next = accessedPtr->next;
-    accessedPtr->next->prev = accessedPtr->prev;
+    if(accessedPtr->prev != NULL)  {
+        accessedPtr->prev->next = accessedPtr->next;
+    }
+    if(accessedPtr->next != NULL)  {
+        accessedPtr->next->prev = accessedPtr->prev;
+    }
 
     //make it the head
     setRef->head = accessedPtr;
@@ -659,6 +664,7 @@ int Set::read(uint address, uint* data, uint count)
 
     memReference->read(readaddr, buffer, blockSize);
     fetchedBlock->block->write(readaddr, buffer, blockSize);
+    fetchedBlock->block->setTag(getTag(readaddr));
 
     //read data into given buffer
     fetchedBlock->block->read(address, data, count);
@@ -711,6 +717,7 @@ int Set::write(uint address, uint* data, uint count)
     //get block
     memReference->read(readaddr, buffer, blockSize);
     fetchedBlock->block->write(readaddr, buffer, blockSize);
+    fetchedBlock->block->setTag(getTag(readaddr));
 
     //write into it
     fetchedBlock->block->write(address, data, count);
