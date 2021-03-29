@@ -158,23 +158,28 @@ private:
     Memory* memReference;
     VictimManager* vicMan;
 
-    //get tag from address
-    uint getTag(uint addr);
     //reflects block access in PLRU/LRU/others
     void reflectBlockAccess(BlockNode* blockPtr);
     //adds new block to set, replaces victim block
     int addNewBlock(BlockNode* blockPtr);
     //writes back a victim block
     void writeBack(BlockNode* victimPtr);
-
+    
 public:
     //constructor: many functions
     Set(Memory* mR, int index, int numSets, int setSize, int blockSize, int repPolicy);
+
+     //get tag from address
+    uint getTag(uint addr);
 
     //read <count> words from address into <data[]>
     int read(uint address, uint* data, uint count = 1);
     int write(uint address, uint* data, uint count = 1);
 
+    bool isFull();
+    //stores the accessed addresses from cache
+    //useful to determine compulsory misses
+    std::set<int, std::greater<int>> stat_addr_queried;
     //friends since they access the Blocks LinkedList
     friend class VictimManager;
     friend class RandomVictimManager;
@@ -267,16 +272,13 @@ private:
     //gets an index from an address
     uint getIndex(uint address);
 
-    //stores the accessed addresses from cache
-    //useful to determine compulsory misses
-    std::set<int, std::greater<int>> stat_addr_queried;
 public:
     Cache(Memory* mR, int cacheSize, int blockSize, int org, int repPolicy);
 
     //read <count> words from <address> into <buffer[]>
     void read(uint address, uint* buffer, uint count = 1);
     void write(uint address, uint* buffer, uint count = 1);
-
+    bool isFull();
     //statistics
     int stat_cache_read = 0;
     int stat_cache_write = 0;
@@ -392,17 +394,14 @@ BlockNode* RandomVictimManager::getVictim()
     //copy counter
     uint t = counter;
 
-    //increment counter
     counter = (counter + 1) % setRef->size;;
     
-    //traverse linked list to invalid/victim location
     BlockNode* tmp = setRef->head;
     while(t > 0)  {
         tmp = tmp->next;
         t--;
     }
 
-    //return the node's address
     return tmp;
 }
 
@@ -413,31 +412,36 @@ LRUVictimManager::LRUVictimManager(Set* sR)
 
 void LRUVictimManager::reflectBlockAccess(BlockNode* accessedPtr)
 {
-    //store current head
     BlockNode* tmp = setRef->head;
 
     //remove accessed block from middle of set
-    accessedPtr->prev->next = accessedPtr->next;
-    accessedPtr->next->prev = accessedPtr->prev;
+    if(accessedPtr->prev != NULL)
+    {    
+        accessedPtr->prev->next = accessedPtr->next;
+    }
+    else{
+        return;
+    }
+    if(accessedPtr->next != NULL){
+        accessedPtr->next->prev = accessedPtr->prev;
+    }
 
-    //make it the head
-    setRef->head = accessedPtr;
+    accessedPtr->next = setRef->head;
+    setRef->head->prev = accessedPtr;
     accessedPtr->prev = NULL;
+    setRef->head = accessedPtr;
 
-    //add the rest of the list to the end of the new head
-    setRef->head->next = tmp;
-    tmp->prev = setRef->head;
 }
 
 BlockNode* LRUVictimManager::getVictim()
 {
-    //get last node
     BlockNode* tmp = setRef->head;
     while(tmp->next != NULL)
     {
+        if(!(tmp->block->isValid()))
+            return tmp;
         tmp = tmp->next;
     }
-
     return tmp;
 }
 
@@ -447,7 +451,7 @@ TreeVictimManager::TreeVictimManager(Set* sR)
     this->setSize = setRef->size;
 
     //() : all init to false
-    tree = new bool[setSize - 1]();
+    tree = new bool[setSize- 1]();
 }
 
 void TreeVictimManager::reflectBlockAccess(BlockNode* accessedPtr)
@@ -464,7 +468,7 @@ void TreeVictimManager::reflectBlockAccess(BlockNode* accessedPtr)
 
     //adjusted for 0-based indexing
     int curr = index + setSize - 1; //issue: curr is int here
-    while(curr > -1)
+    while(curr > 0)
     {
         //make the parent bit point away
         tree[(curr - 1) / 2] = (curr % 2);
@@ -483,8 +487,6 @@ BlockNode* TreeVictimManager::getVictim()
         //go to child according to current bit
         curr = (2 * curr) + tree[curr] + 1;
 
-        //invert the bit (/2 to go back up)
-        tree[(curr - 1) / 2] = !tree[(curr - 1) / 2];
     }
 
     curr = curr - setSize + 1;
@@ -516,12 +518,9 @@ void Set::reflectBlockAccess(BlockNode* blockPtr)
 
 int Set::addNewBlock(BlockNode* blockPtr)
 {
-    int hitstatus; //for stats
-
-    //get victim ptr
+    int hitstatus;
     BlockNode* victimPtr = vicMan->getVictim();
 
-    //check if it is valid, report accordingly
     bool valid = victimPtr->block->isValid();
 
     hitstatus = C_MISS_INV;
@@ -538,38 +537,47 @@ int Set::addNewBlock(BlockNode* blockPtr)
     {
         validBlocks++;
     }
-
-    //add new block into list
     if(victimPtr->prev != NULL)
     {
         victimPtr->prev->next = blockPtr;
         blockPtr->prev = victimPtr->prev;
+
+    }
+    else  {
+        head = blockPtr;
     }
     if(victimPtr->next != NULL)
     {
         victimPtr->next->prev = blockPtr;
         blockPtr->next = victimPtr->next;
+
     }
     reflectBlockAccess(blockPtr);
+
     //get rid of the victim block
-    delete victimPtr;
+    //delete victimPtr;
 
     return hitstatus;
 }
 
 void Set::writeBack(BlockNode* victimPtr)
 {
-    //compute address in memory
     uint memAddr = victimPtr->block->getTag();
     memAddr = (memAddr << indexLength) + index;
     memAddr = (memAddr << offsetLength);
 
-    //write the block into memory
     uint* buffer = new uint[blockSize];
     victimPtr->block->read(0, buffer, blockSize);
     memReference->write(memAddr, buffer, blockSize);
 }
 
+bool Set::isFull(){
+    if(validBlocks == size)
+    {
+        return true;
+    }
+    return false;
+}
 Set::Set(Memory* mR, int index, int numSets, int setSize, int blockSize, int repPolicy)
 {
     //absorb params
@@ -661,6 +669,7 @@ int Set::read(uint address, uint* data, uint count)
     fetchedBlock->block->write(readaddr, buffer, blockSize);
 
     //read data into given buffer
+    fetchedBlock->block->setTag(tag);
     fetchedBlock->block->read(address, data, count);
 
     //add it to the set (replacing victim if needed)
@@ -713,6 +722,7 @@ int Set::write(uint address, uint* data, uint count)
     fetchedBlock->block->write(readaddr, buffer, blockSize);
 
     //write into it
+    fetchedBlock->block->setTag(tag);
     fetchedBlock->block->write(address, data, count);
 
     //add the new block
@@ -771,63 +781,94 @@ uint Cache::getIndex(uint address)
     return (address >> offsetLength) & (numSets - 1);
 }
 
+bool Cache::isFull(){
+    for(int i = 0; i < numSets; i++)
+    {
+        if(!(sets[i]->isFull()))
+            return false;
+    }
+    return true;
+}
 void Cache::read(uint address, uint* buffer, uint count)
 {
     stat_cache_access++;
     stat_cache_read++;
-
-    //these two lines are actual read, others are for stats
+    bool temp = false;
     uint index = getIndex(address);
+    uint tag = sets[index]->getTag(address);
     int hitstatus = sets[index]->read(address, buffer, count);
 
-    if(hitstatus != C_HIT)  {
-        stat_cache_miss++;
-        stat_cache_miss_read++;
-        if(numSets == 1)  { //fully assoc
-            stat_cache_miss_capacity++;
-        }
-        if(hitstatus == C_MISS_VAL)  {
-            stat_cache_miss_conflict++;
-        }
-        if(hitstatus == C_MISS_DIR)  {
-            stat_cache_miss_conflict++;
-            stat_cache_dirty_evicted++;
-        }
-    }
-
-    if(stat_addr_queried.find(address) == stat_addr_queried.end())  {
-        stat_addr_queried.insert(address);
+    if(sets[index]->stat_addr_queried.find(tag) == sets[index]->stat_addr_queried.end())  {
+        sets[index]->stat_addr_queried.insert(tag);
         stat_cache_miss_compulsory++;
+        temp = true;
     }
+        if(hitstatus != C_HIT)  {
+            stat_cache_miss++;
+            stat_cache_miss_read++;
+            if(numSets == 1)  {
+                if(hitstatus != C_MISS_INV)  { //fully assoc
+                    stat_cache_miss_capacity++;
+                }
+                if(hitstatus == C_MISS_DIR)  {
+                    stat_cache_dirty_evicted++;
+                }
+            }
+            if(numSets != 1)  {
+                if(hitstatus != C_MISS_INV)  {
+                    if(hitstatus == C_MISS_DIR)  {
+                        stat_cache_dirty_evicted++;
+                    }
+                    if((this->isFull()))  {
+                        stat_cache_miss_capacity++;   
+                    }
+                    else if(!temp)  {
+                        stat_cache_miss_conflict++;
+                    }
+                }
+            }
+        }
 }
 
 void Cache::write(uint address, uint* buffer, uint count)
 {
     stat_cache_access++;
     stat_cache_write++;
-
+    bool temp = false;
     uint index = getIndex(address);
+    uint tag = sets[index]->getTag(address);
     int hitstatus = sets[index]->write(address, buffer, count);
 
-    if(hitstatus != C_HIT)  {
-        stat_cache_miss++;
-        stat_cache_miss_write++;
-        if(numSets == 1)  { //fully assoc
-            stat_cache_miss_capacity++;
-        }
-        if(hitstatus == C_MISS_VAL)  {
-            stat_cache_miss_conflict++;
-        }
-        if(hitstatus == C_MISS_DIR)  {
-            stat_cache_miss_conflict++;
-            stat_cache_dirty_evicted++;
-        }
-    }
-
-    if(stat_addr_queried.find(address) == stat_addr_queried.end())  {
-        stat_addr_queried.insert(address);
+    if(sets[index]->stat_addr_queried.find(tag) == sets[index]->stat_addr_queried.end())  {
+        sets[index]->stat_addr_queried.insert(tag);
         stat_cache_miss_compulsory++;
+        temp = true;
     }
+        if(hitstatus != C_HIT)  {
+            stat_cache_miss++;
+            stat_cache_miss_write++;
+            if(numSets == 1)  {
+                if(hitstatus != C_MISS_INV)  { //fully assoc
+                    stat_cache_miss_capacity++;
+                }
+                if(hitstatus == C_MISS_DIR)  {
+                    stat_cache_dirty_evicted++;
+                }
+            }
+            if(numSets != 1)  {
+                if(hitstatus != C_MISS_INV)  {
+                    if(hitstatus == C_MISS_DIR)  {
+                        stat_cache_dirty_evicted++;
+                    }
+                    if((this->isFull()))  {
+                        stat_cache_miss_capacity++;   
+                    }
+                    else if(!temp)  {
+                        stat_cache_miss_conflict++;
+                    }
+                }
+            }
+        }
 }
 
 /*-------------------------------------------------------------------------------------------------
@@ -862,18 +903,11 @@ int main()
         else if(command == 'w')
             L1.write(std::stoi(hexCode,0,16), &buffer);
     }
-
     std::cout << L1.stat_cache_access << std::endl;
-    std::cout << L1.stat_cache_read << std::endl;
-    std::cout << L1.stat_cache_write << std::endl;
-    std::cout << L1.stat_cache_miss << std::endl;
+    std::cout << L1.stat_cache_read<< std::endl;
+    std::cout << L1.stat_cache_write<< std::endl;
     std::cout << L1.stat_cache_miss_compulsory << std::endl;
-
-    if(!org)
-        std::cout << L1.stat_cache_miss_capacity << std::endl;
-
-    else
-        std::cout << 0 << std::endl;
+    std::cout << L1.stat_cache_miss_capacity << std::endl;
     std::cout << L1.stat_cache_miss_conflict << std::endl;
     std::cout << L1.stat_cache_miss_read << std::endl;
     std::cout << L1.stat_cache_miss_write << std::endl;
