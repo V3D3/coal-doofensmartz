@@ -254,7 +254,7 @@ private:
 	void writeRegister(int reg, byte val);
 public:
 	// init with caches and rf
-	Processor(std::fstream Icache, std::fstream Dcache, std::fstream RegFile);
+	Processor(std::fstream& Icache, std::fstream& Dcache, std::fstream& RegFile);
 	~Processor();
 
 	// initiates run, runs until halted
@@ -302,6 +302,69 @@ bool Processor::isHalted()  {
 	return halted;
 }
 
+void Processor::executeStage()
+{
+	int opCode = REG_EX_IR >> 12;
+	
+	switch(opCode)
+	{
+		case 0 :	REG_MM_AO = REG_EX_A + REG_EX_B;	//setting the result
+					WB_run = true;	//skip to write back
+					break;	//break statement for the switch
+
+		case 1 :	REG_MM_AO = REG_EX_A - REG_EX_B;	//setting the result
+					WB_run = true;	//skip to write back
+					break;	//break statement for the switch
+
+		case 2 :	REG_MM_AO = REG_EX_A * REG_EX_B;	//setting the result
+					WB_run = true;	//skip to write back
+					break;	//break statement for the switch
+
+		case 3 :	REG_MM_A0 = REG_EX_A + 1;	//setting the result
+					break;	//break statement for the switch
+
+		case 4 :	REG_MM_AO = REG_EX_A & REG_EX_B;	//setting the result
+					WB_run = true;	//skip to write back
+					break;	//break statement for the switch
+
+		case 5 :	REG_MM_AO = REG_EX_A | REG_EX_B;	//setting the result
+					WB_run = true;	//skip to write back
+					break;	//break statement for the switch
+
+		case 6 :	REG_MM_AO = ~REG_EX_A;	//setting the result
+					WB_run = true;	//skip to write back
+					break;	//break statement for the switch
+
+		case 7 :	REG_MM_AO = REG_EX_A ^ REG_EX_B;	//setting the result
+					WB_run = true;	//skip to write back
+					break;	//break statement for the switch
+
+		case 8 :	REG_MM_AO = REG_EX_A + REG_EX_B;	//setting the result
+					MM_run = true;	//operate memory next
+					break;	//break statement for the switch
+
+		case 9 :	REG_MM_AO = REG_EX_A + REG_EX_B;	//setting the result
+					MM_run = true;	//operate memory next
+					break;	//break statement for the switch
+
+		case 10:	REG_MM_AO = REG_EX_PC + //fix the jump statement//
+					WB_run = true;	//skip to write back
+					break;	//break statement for the switch
+
+		case 11:	if(REG_EX_A==0)
+						REG_MM_AO =  //fix the jump statement//
+					WB_run = true;	//skip to write back
+					break;	//break statement for the switch
+
+		case 15:	REG_MM_AO = 
+					WB_run = true;	//skip to write back
+					break;	//break statement for the switch
+
+		default:	break;	//break statement for the switch
+	}
+
+	EX_run = false;	//setting that the process is finished
+}
 
 int main()
 {
@@ -311,7 +374,7 @@ int main()
 	Dcache.open("DCache.txt");	//getting the filepointer of the data cache file
 	RegFile.open("RF.txt");	//the input for the register file
 
-	$className$ processor(Icache, Dcache, RegFile);	//sending the adress class as pointers/*change class name*/
-	processor.process();	/*change method name*/
+	Processor processor(Icache, Dcache, RegFile);	//sending the adress class as pointers/*change class name*/
+	processor.run();	//running the processor
 	return 0;	//exiting the code
 }
