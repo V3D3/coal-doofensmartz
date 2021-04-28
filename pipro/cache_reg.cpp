@@ -330,6 +330,71 @@ bool Processor::isHalted()  {
 	return halted;
 }
 
+
+void Processor::executeStage()
+{
+	int opCode = REG_EX_IR >> 12;
+	
+	switch(opCode)
+	{
+		case 0 :	REG_MM_AO = REG_EX_A + REG_EX_B;	//setting the result
+					break;	//break statement for the switch
+
+		case 1 :	REG_MM_AO = REG_EX_A - REG_EX_B;	//setting the result
+					break;	//break statement for the switch
+
+		case 2 :	REG_MM_AO = REG_EX_A * REG_EX_B;	//setting the result
+					break;	//break statement for the switch
+
+		case 3 :	REG_MM_A0 = REG_EX_A + 1;	//setting the result
+					break;	//break statement for the switch
+
+		case 4 :	REG_MM_AO = REG_EX_A & REG_EX_B;	//setting the result
+					break;	//break statement for the switch
+
+		case 5 :	REG_MM_AO = REG_EX_A | REG_EX_B;	//setting the result
+					break;	//break statement for the switch
+
+		case 6 :	REG_MM_AO = ~REG_EX_A;	//setting the result
+					break;	//break statement for the switch
+
+		case 7 :	REG_MM_AO = REG_EX_A ^ REG_EX_B;	//setting the result
+					break;	//break statement for the switch
+
+		case 8 :	REG_MM_AO = REG_EX_A + REG_EX_B;	//setting the result
+					break;	//break statement for the switch
+
+		case 9 :	REG_MM_AO = REG_EX_A + REG_EX_B;	//setting the result
+					break;	//break statement for the switch
+
+		case 10:	REG_MM_AO = REG_EX_PC + //fix the jump statement//
+					break;	//break statement for the switch
+
+		case 11:	if(REG_EX_A==0)
+						REG_MM_AO =  //fix the jump statement//
+					break;	//break statement for the switch
+
+		case 15:	REG_MM_AO = 
+					break;	//break statement for the switch
+
+		default:	break;	//break statement for the switch
+	}
+
+	if(opCode==8 || opCode==9)
+	{
+		MM_run = true;	//move to memory operation
+		REG_MM_IR = REG_EX_IR;	//passing the instruction value
+	}
+
+	else
+	{
+		WB_run = true;	//move to writeback operation
+		REG_WB_IR = REG_EX_IR;	//passing the instruxtion value
+	}
+
+	EX_run = false;	//setting that the process is finished
+}
+
 void Processor::fetchStage()  {
 	REG_ID_IR = (((usint) iCache->readByte(REG_IF_PC)) << 8) + ((usint) iCache->readByte(REG_IF_PC));
 
@@ -370,7 +435,6 @@ void Processor::decodeStage()  {
 	// logical class
 }
 
-
 int main()
 {
 	std::ifstream Icache, Dcache, RegFile;	//creating objects for file handling
@@ -380,6 +444,6 @@ int main()
 	RegFile.open("RF.txt");	//the input for the register file
 
 	Processor processor(Icache, Dcache, RegFile);	//sending the adress class as pointers/*change class name*/
-	processor.process();	/*change method name*/
+	processor.run();	//running the processor
 	return 0;	//exiting the code
 }
