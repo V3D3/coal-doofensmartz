@@ -7,6 +7,14 @@
 
 typedef unsigned int uint;
 typedef unsigned short int usint;
+typedef unsigned char byte;
+
+#define IF 0
+#define ID 1
+#define EX 2
+#define MM 3
+#define WB 4
+
 
 int log2(uint x)
 {
@@ -159,7 +167,7 @@ RegFile::RegFile(std::fstream fp){
 		RF[regNum] = value;
 		regNum++;
 	}
-}
+};
 usint RegFile::read(usint index){
 	num_of_reads++;
 	return RF[index];
@@ -194,15 +202,43 @@ private:
 	Cache* iCache, dCache;
 	RegFile regFile;
 
-	bool halted = false;;
+	bool halted = false;
 
-	
+	bool stallIF = false;
+	bool stallID = false;
+	bool stallEX = false;
+	bool stallMM = false;
+	bool stallWB = false;
+
+	// declare IF registers here
+	void fetchStage();
+	// declare ID registers here
+	void decodeStage();
+	// declare EX registers here
+	void executeStage();
+	// declare MM registers here
+	void memoryStage();
+	// declare WB registers here
+	void writebackStage();
+
+	void flushPipeline();
+
+	void readRegisters(int reg1, int reg2);
+	void writeRegister(int reg, byte val);
 public:
-	Processor();
+	// init with caches and rf
+	Processor(std::fstream Icache, std::fstream Dcache, std::fstream RegFile);
 	~Processor();
 
+	// initiates run, runs until halted
+	void run();
+	// run one cycle
+	void cycle();
+
+	// is processor halted?
 	bool isHalted();
-}
+};
+
 
 
 int main()
