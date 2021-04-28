@@ -155,13 +155,8 @@ void Cache::resetAccesses(){
 class RegFile
 {
 	int regSize = 16;
-<<<<<<< HEAD
-	std::ifstream& srcFile;
-	std::vector<usint> RF;
-=======
 	std::fstream srcFile;
 	std::vector<byte> RF;
->>>>>>> 9bbae6f25c34270ccf9d3432f1f168c79f96faeb
 	int num_of_reads = 0;
 	int num_of_writes = 0;
 public:
@@ -176,11 +171,7 @@ public:
 };
 RegFile::RegFile(std::ifstream& fp){
 	this->srcFile = fp;
-<<<<<<< HEAD
-	RF = std::vector<usint> (regSize);
-=======
 	RF = vector<byte> (regSize);
->>>>>>> 9bbae6f25c34270ccf9d3432f1f168c79f96faeb
 	std::string hexCode;
 	byte value;
 	int regNum = 0;
@@ -224,6 +215,7 @@ private:
 	Cache* iCache, dCache;
 	RegFile regFile;
 
+	bool haltScheduled = false;
 	bool halted = false;
 
 	bool stallIF = false;
@@ -307,8 +299,16 @@ Processor::Processor(std::fstream Icache, std::fstream Dcache, std::fstream RegF
 }
 
 void Processor::run()  {
-	while(!isHalted())  {
+	while(!haltScheduled && !isHalted())  {
 		cycle();
+	}
+
+	while(!haltScheduled)  {
+		if((EX_run || MM_run || WB_run) == false)  {
+			halted = true;
+			haltScheduled = false;
+			return;
+		}
 	}
 }
 
@@ -331,8 +331,11 @@ bool Processor::isHalted()  {
 }
 
 void Processor::fetchStage()  {
-	REG_ID_IR = iCache->readByte(REG_IF_PC);
+	REG_ID_IR = (((usint) iCache->readByte(REG_IF_PC)) << 8) + ((usint) iCache->readByte(REG_IF_PC));
+
 	ID_run = true;
+
+	REG_IF_PC += 2;
 }
 
 void Processor::decodeStage()  {
@@ -343,14 +346,28 @@ void Processor::decodeStage()  {
 
 	byte opcode = (REG_ID_IR & 0xf000) >> 12;
 	
+	// halt class
 	if(opcode == OPC_HALT)  {
 		IF_run = false;
+		ID_run = false;
+
+		haltScheduled = true;
+		// let the other pipeline stages (previous instructions) complete
 		return;
 	}
 
+	// control class - HAZ
 	if((opcode == OPC_JMP) || (opcode == OPC_BEQZ))  {
+		stallID = true;
 
+		
+		return;
 	}
+	
+	// data class - HAZ
+
+	// arithmetic class
+	// logical class
 }
 
 
