@@ -1,4 +1,4 @@
-#include <iostream>
+#include <iostream>	//including all the required header files
 #include <fstream>
 #include <cassert>
 #include <iterator>
@@ -7,17 +7,23 @@
 #include <vector>
 #include <climits>
 
-typedef unsigned int uint;
+/*-------------------------------------------------------------------------------------------------
+*    Author   : Team DOOFENSMARTZ
+*    Code     : CPP code to simulate a pipeline processor
+*    Question : CS2610 A8
+-------------------------------------------------------------------------------------------------*/
+
+typedef unsigned int uint;	//using typedef to change names for easier use
 typedef unsigned short usint;
 typedef unsigned char byte;
 
-#define IF 0
+#define IF 0	//making definitions to easen the code notations
 #define ID 1
 #define EX 2
 #define MM 3
 #define WB 4
 
-#define OPC_ADD 0
+#define OPC_ADD 0	//making definitions to easen the code notations
 #define OPC_SUB 1
 #define OPC_MUL 2
 #define OPC_INC 3
@@ -32,30 +38,36 @@ typedef unsigned char byte;
 #define OPC_HALT 15
 
 
-int log2(uint x)
+int log2(uint x)	//a function to find value of log of a number wrt base 2
 {
     int r = 0;
-    while(x > 0)
+    while(x > 0)	
     {
-        x = x >> 1;
-        r++;
+        x = x >> 1;	//performing repeated right shifts to reduce the number by 2 in each step
+        r++;	//counting the number of right shifts
     }
 
-    return r - 1;
+    return r - 1;	//returing the value of log
 }
 
-int pow2(uint n)
+int pow2(uint n)	//a function to find value of 2 raised to the power of a number
 {
     int r = 1;
     while(n > 0)
     {
-        r = r << 1;
-        n--;
+        r = r << 1;	//performing repeated left shifts to multiply by 2 in each step
+        n--;	//decrimentiing the count
     }
 
-    return r;
+    return r;	//returning the result
 }
-class Cache
+
+/****************************************************************************************************
+ * 	Class Name	: Cache
+ * 	Inheritences: NIL
+ * 	Use			: Used to act as a cache for a processor
+****************************************************************************************************/
+class Cache	//the cache class that is being used for Data and instrution caches
 {
 	uint cacheSize = 256;
 	uint blockSize = 4;
@@ -151,11 +163,11 @@ void Cache::resetAccesses(){
  	return false;
  }
 
-
-
-
-
-
+/****************************************************************************************************
+ * 	Class Name	: RegFile
+ * 	Inheritences: NIL
+ * 	Use			: Used to act as a the register file for the processor
+****************************************************************************************************/
 class RegFile
 {
 	int regSize = 16;
@@ -214,13 +226,15 @@ void RegFile::resetAccesses(){
  	return false;
  }
 
-
-
+/****************************************************************************************************
+ * 	Class Name	: Processor
+ * 	Inheritences: NIL
+ * 	Use			: Used to act as the pipeline processor for the simulator
+****************************************************************************************************/
 class Processor  {
 private:
-	Cache* iCache;
-	Cache* dCache;
-	RegFile* regFile;
+	Cache* iCache, dCache;	//cache object pointers to store instruction and data caches
+	RegFile* regFile;	//register file object pointer to allot the object later
 
 	bool haltScheduled = false;
 	bool halted = false;
@@ -305,9 +319,9 @@ Processor::Processor(std::ifstream * Icache, std::ifstream * Dcache, std::ifstre
 	this->regFile = new RegFile(regFile);
 }
 
-void Processor::run()  {
-	while(!haltScheduled && !isHalted())  {
-		cycle();
+void Processor::run()  {	//the run function to initiate the processor
+	while(!haltScheduled && !isHalted())  {	//while halt is not called execute instructions
+		cycle();	//call the cycle function, the equivalent of one cycle of the processor
 	}
 
 	while(!haltScheduled)  {
@@ -510,6 +524,12 @@ void Processor::writebackStage(){
 	MM_run = false;
 }
 
+/*-------------------------------------------------------------------------------------------------
+*    Function Name : main
+*    Args          : Nil
+*    Return Type   : int(0)
+*    Application   : Entry point to the Proram
+-------------------------------------------------------------------------------------------------*/
 int main()
 {
 	std::ifstream Icache, Dcache, RegFile;	//creating objects for file handling
