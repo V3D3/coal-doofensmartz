@@ -6,7 +6,7 @@
 #include <cstring>
 
 typedef unsigned int uint;
-typedef unsigned short int usint;
+typedef unsigned short usint;
 typedef unsigned char byte;
 
 #define IF 0
@@ -14,6 +14,20 @@ typedef unsigned char byte;
 #define EX 2
 #define MM 3
 #define WB 4
+
+#define OPC_ADD 0
+#define OPC_SUB 1
+#define OPC_MUL 2
+#define OPC_INC 3
+#define OPC_AND 4
+#define OPC_OR 5
+#define OPC_NOT 6
+#define OPC_XOR 7
+#define OPC_LD 8
+#define OPC_ST 9
+#define OPC_JMP 10
+#define OPC_BEQZ 11
+#define OPC_HALT 15
 
 
 int log2(uint x)
@@ -51,10 +65,10 @@ class Cache
 public:
 	Cache(std::fstream fp);
 	~Cache();
-	uint readBlock(usint address);
-	usint readByte(usint address);
-	void writeBlock(usint address, uint data);
-	void writeByte(usint address, uint data);
+	uint readBlock(byte address);
+	byte readByte(byte address);
+	void writeBlock(byte address, uint data);
+	void writeByte(byte address, byte data);
 	void resetAccesses();
 	bool readBusy();
 	bool writeBusy();
@@ -82,11 +96,11 @@ Cache::Cache(std::fstream fp){
 		offset++;
 	}
 }
-uint Cache::readBlock(usint address){
+uint Cache::readBlock(byte address){
 	num_of_reads++;
 	return sets[address >> 2];
 }
-usint Cache::readByte(usint address){
+usint Cache::readByte(byte address){
 	uint data = readBlock(address);
 	uint offset = address & (blockSize-1);
 	for(int i = offset; i < 3; i++)
@@ -97,20 +111,19 @@ usint Cache::readByte(usint address){
 	{
 		data >> 8;
 	}
-	return (usint)data;
+	return (byte)data;
 }
-void Cache::writeBlock(usint address, uint data){
+void Cache::writeBlock(byte address, uint data){
 	sets[address >> log2(blockSize)] = data;
 }
-void Cache::writeByte(usint address, uint data){
+void Cache::writeByte(byte address, byte data){
 	num_of_writes++;
-	uint blockNum = address >> 2;
-	uint offset = address & (blockSize-1);
+	byte blockNum = address >> 2;
+	byte offset = address & (blockSize-1);
 	uint mask = cacheSize-1;
 	for(int i = 0; i < offset; i++)
 	{
 		mask << 8;
-		data << 8;
 	}
 	mask = UINT_MAX - mask;
 	sets[blockNum] = (sets[blockNum] & mask) + data;
@@ -143,24 +156,24 @@ class RegFile
 {
 	int regSize = 16;
 	std::fstream srcFile;
-	std::vector<usint> RF;
+	std::vector<byte> RF;
 	int num_of_reads = 0;
 	int num_of_writes = 0;
 public:
-	RegFile(std::fstream fp);
+	RegFile(std::ifstream& fp);
 	~RegFile();
-	usint read(usint index);
-	void write(usint index, usint data);
+	byte read(byte index);
+	void write(byte index, byte data);
 	void updateSrcFile();
 	void resetAccesses();
 	bool readBusy();
 	bool writeBusy();
 };
-RegFile::RegFile(std::fstream fp){
+RegFile::RegFile(std::ifstream& fp){
 	this->srcFile = fp;
-	RF = vector<uint> (regSize);
+	RF = vector<byte> (regSize);
 	std::string hexCode;
-	usint value;
+	byte value;
 	int regNum = 0;
 	while(fp >> hexCode){
 		value = std::stoi(hexCode,0,16);
@@ -168,11 +181,11 @@ RegFile::RegFile(std::fstream fp){
 		regNum++;
 	}
 };
-usint RegFile::read(usint index){
+byte RegFile::read(byte index){
 	num_of_reads++;
 	return RF[index];
 }
-void RegFile::write(usint index,usint data){
+void RegFile::write(byte index,byte data){
 	num_of_writes++;
 	RF[index] = data;
 }
@@ -254,7 +267,7 @@ private:
 	void writeRegister(int reg, byte val);
 public:
 	// init with caches and rf
-	Processor(std::fstream& Icache, std::fstream& Dcache, std::fstream& RegFile);
+	Processor(std::ifstream& Icache, std::ifstream& Dcache, std::ifstream& RegFile);
 	~Processor();
 
 	// initiates run, runs until halted
@@ -296,11 +309,18 @@ void Processor::cycle()  {
 	// so WB's buffer is cleared before MEM tries
 	// to write to it
 	stat_cycles++;
+
+	writebackStage();
+	memoryStage();
+	executeStage();
+	decodeStage();
+	fetchStage();
 }
 
 bool Processor::isHalted()  {
 	return halted;
 }
+
 
 void Processor::executeStage()
 {
@@ -364,6 +384,29 @@ void Processor::executeStage()
 	}
 
 	EX_run = false;	//setting that the process is finished
+}
+
+void Processor::fetchStage()  {
+	REG_ID_IR = iCache->readByte(REG_IF_PC);
+	ID_run = true;
+}
+
+void Processor::decodeStage()  {
+	if((!ID_run) || stallID)  {
+		return;
+	}
+	REG_EX_IR = REG_ID_IR;
+
+	byte opcode = (REG_ID_IR & 0xf000) >> 12;
+	
+	if(opcode == OPC_HALT)  {
+		IF_run = false;
+		return;
+	}
+
+	if((opcode == OPC_JMP) || (opcode == OPC_BEQZ))  {
+
+	}
 }
 
 int main()
