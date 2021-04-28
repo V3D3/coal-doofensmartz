@@ -186,3 +186,19 @@ void RegFile::resetAccesses(){
  	}
  	return false;
  }
+
+
+
+
+int main()
+{
+	std::ifstream Icache, Dcache, RegFile;	//creating objects for file handling
+
+	Icache.open("ICache.txt");	//getting the filepointer of the Instruction cache file
+	Dcache.open("DCache.txt");	//getting the filepointer of the data cache file
+	RegFile.open("RF.txt");	//the input for the register file
+
+	$className$ processor(Icache, Dcache, RegFile);	//sending the adress class as pointers/*change class name*/
+	processor.process();	/*change method name*/
+	return 0;	//exiting the code
+}
