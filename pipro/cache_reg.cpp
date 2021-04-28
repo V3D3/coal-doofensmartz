@@ -212,8 +212,9 @@ void RegFile::resetAccesses(){
 
 class Processor  {
 private:
-	Cache* iCache, dCache;
-	RegFile regFile;
+	Cache* iCache;
+	Cache* dCache;
+	RegFile* regFile;
 
 	bool haltScheduled = false;
 	bool halted = false;
@@ -292,10 +293,10 @@ public:
 	int stat_stalls_control = 0;
 };
 
-Processor::Processor(std::fstream Icache, std::fstream Dcache, std::fstream RegFile)  {
+Processor::Processor(std::fstream Icache, std::fstream Dcache, std::fstream regFile)  {
 	iCache = new Cache(Icache);
 	dCache = new Cache(dCache);
-	regFile = new Cache(RegFile);
+	this->regFile = new RegFile(regFile);
 }
 
 void Processor::run()  {
@@ -337,50 +338,28 @@ void Processor::executeStage()
 	
 	switch(opCode)
 	{
-		case 0 :	REG_MM_AO = REG_EX_A + REG_EX_B;	//setting the result
-					break;	//break statement for the switch
+		case OPC_ADD :	REG_MM_AO = REG_EX_A + REG_EX_B; break;
+		case OPC_SUB :	REG_MM_AO = REG_EX_A - REG_EX_B; break;
+		case OPC_MUL :	REG_MM_AO = REG_EX_A * REG_EX_B; break;
+		case OPC_INC :	REG_MM_AO = REG_EX_A + 1; 		 break;
+		case OPC_AND :	REG_MM_AO = REG_EX_A & REG_EX_B; break;
+		case OPC_OR :	REG_MM_AO = REG_EX_A | REG_EX_B; break;
+		case OPC_NOT :	REG_MM_AO = ~REG_EX_A; 			 break;
+		case OPC_XOR :	REG_MM_AO = REG_EX_A ^ REG_EX_B; break;
+		case OPC_LD :	REG_MM_AO = REG_EX_A + REG_EX_B; break;
+		case OPC_ST :	REG_MM_AO = REG_EX_A + REG_EX_B; break;
 
-		case 1 :	REG_MM_AO = REG_EX_A - REG_EX_B;	//setting the result
-					break;	//break statement for the switch
+		case OPC_JMP:	REG_MM_AO = REG_EX_PC + //fix the jump statement//
+					break;
 
-		case 2 :	REG_MM_AO = REG_EX_A * REG_EX_B;	//setting the result
-					break;	//break statement for the switch
-
-		case 3 :	REG_MM_A0 = REG_EX_A + 1;	//setting the result
-					break;	//break statement for the switch
-
-		case 4 :	REG_MM_AO = REG_EX_A & REG_EX_B;	//setting the result
-					break;	//break statement for the switch
-
-		case 5 :	REG_MM_AO = REG_EX_A | REG_EX_B;	//setting the result
-					break;	//break statement for the switch
-
-		case 6 :	REG_MM_AO = ~REG_EX_A;	//setting the result
-					break;	//break statement for the switch
-
-		case 7 :	REG_MM_AO = REG_EX_A ^ REG_EX_B;	//setting the result
-					break;	//break statement for the switch
-
-		case 8 :	REG_MM_AO = REG_EX_A + REG_EX_B;	//setting the result
-					break;	//break statement for the switch
-
-		case 9 :	REG_MM_AO = REG_EX_A + REG_EX_B;	//setting the result
-					break;	//break statement for the switch
-
-		case 10:	REG_MM_AO = REG_EX_PC + //fix the jump statement//
-					break;	//break statement for the switch
-
-		case 11:	if(REG_EX_A==0)
+		case OPC_BEQZ:	if(REG_EX_A==0)
 						REG_MM_AO =  //fix the jump statement//
-					break;	//break statement for the switch
+					break;
 
-		case 15:	REG_MM_AO = 
-					break;	//break statement for the switch
-
-		default:	break;	//break statement for the switch
+		default:	break;
 	}
 
-	if(opCode==8 || opCode==9)
+	if((opCode==8) || (opCode==9))
 	{
 		MM_run = true;	//move to memory operation
 		REG_MM_IR = REG_EX_IR;	//passing the instruction value
@@ -389,7 +368,8 @@ void Processor::executeStage()
 	else
 	{
 		WB_run = true;	//move to writeback operation
-		REG_WB_IR = REG_EX_IR;	//passing the instruxtion value
+		REG_WB_AO = REG_MM_AO;
+		REG_WB_IR = REG_EX_IR;
 	}
 
 	EX_run = false;	//setting that the process is finished
