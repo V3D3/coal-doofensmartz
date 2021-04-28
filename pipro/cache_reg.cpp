@@ -434,6 +434,7 @@ void Processor::decodeStage()  {
 	// arithmetic class
 	// logical class
 }
+
 void Processor::memoryStage(){
 	if(!MM_run || stallMM)
 	{
@@ -456,6 +457,7 @@ void Processor::memoryStage(){
 	MM_run = false;
 	return;
 }
+
 void Processor::writebackStage(){
 	if(!WB_run || stallWB)
 	{
@@ -475,6 +477,7 @@ void Processor::writebackStage(){
 	}
 	MM_run = false;
 }
+
 int main()
 {
 	std::ifstream Icache, Dcache, RegFile;	//creating objects for file handling
