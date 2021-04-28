@@ -65,10 +65,10 @@ class Cache
 public:
 	Cache(std::fstream fp);
 	~Cache();
-	uint readBlock(usint address);
-	usint readByte(usint address);
-	void writeBlock(usint address, uint data);
-	void writeByte(usint address, uint data);
+	uint readBlock(byte address);
+	byte readByte(byte address);
+	void writeBlock(byte address, uint data);
+	void writeByte(byte address, byte data);
 	void resetAccesses();
 	bool readBusy();
 	bool writeBusy();
@@ -96,11 +96,11 @@ Cache::Cache(std::fstream fp){
 		offset++;
 	}
 }
-uint Cache::readBlock(usint address){
+uint Cache::readBlock(byte address){
 	num_of_reads++;
 	return sets[address >> 2];
 }
-usint Cache::readByte(usint address){
+usint Cache::readByte(byte address){
 	uint data = readBlock(address);
 	uint offset = address & (blockSize-1);
 	for(int i = offset; i < 3; i++)
@@ -111,20 +111,19 @@ usint Cache::readByte(usint address){
 	{
 		data >> 8;
 	}
-	return (usint)data;
+	return (byte)data;
 }
-void Cache::writeBlock(usint address, uint data){
+void Cache::writeBlock(byte address, uint data){
 	sets[address >> log2(blockSize)] = data;
 }
-void Cache::writeByte(usint address, uint data){
+void Cache::writeByte(byte address, byte data){
 	num_of_writes++;
-	uint blockNum = address >> 2;
-	uint offset = address & (blockSize-1);
+	byte blockNum = address >> 2;
+	byte offset = address & (blockSize-1);
 	uint mask = cacheSize-1;
 	for(int i = 0; i < offset; i++)
 	{
 		mask << 8;
-		data << 8;
 	}
 	mask = UINT_MAX - mask;
 	sets[blockNum] = (sets[blockNum] & mask) + data;
@@ -156,15 +155,20 @@ void Cache::resetAccesses(){
 class RegFile
 {
 	int regSize = 16;
+<<<<<<< HEAD
 	std::ifstream& srcFile;
 	std::vector<usint> RF;
+=======
+	std::fstream srcFile;
+	std::vector<byte> RF;
+>>>>>>> 9bbae6f25c34270ccf9d3432f1f168c79f96faeb
 	int num_of_reads = 0;
 	int num_of_writes = 0;
 public:
 	RegFile(std::ifstream& fp);
 	~RegFile();
-	usint read(usint index);
-	void write(usint index, usint data);
+	byte read(byte index);
+	void write(byte index, byte data);
 	void updateSrcFile();
 	void resetAccesses();
 	bool readBusy();
@@ -172,9 +176,13 @@ public:
 };
 RegFile::RegFile(std::ifstream& fp){
 	this->srcFile = fp;
+<<<<<<< HEAD
 	RF = std::vector<usint> (regSize);
+=======
+	RF = vector<byte> (regSize);
+>>>>>>> 9bbae6f25c34270ccf9d3432f1f168c79f96faeb
 	std::string hexCode;
-	usint value;
+	byte value;
 	int regNum = 0;
 	while(fp >> hexCode){
 		value = std::stoi(hexCode,0,16);
@@ -182,11 +190,11 @@ RegFile::RegFile(std::ifstream& fp){
 		regNum++;
 	}
 };
-usint RegFile::read(usint index){
+byte RegFile::read(byte index){
 	num_of_reads++;
 	return RF[index];
 }
-void RegFile::write(usint index,usint data){
+void RegFile::write(byte index,byte data){
 	num_of_writes++;
 	RF[index] = data;
 }
