@@ -349,8 +349,10 @@ void Processor::executeStage()
 		case OPC_LD :	REG_MM_AO = REG_EX_A + REG_EX_B; break;
 		case OPC_ST :	REG_MM_AO = REG_EX_A + REG_EX_B; break;
 
-		case OPC_JMP:	REG_MM_AO = REG_EX_PC + //fix the jump statement//
-					break;
+		case OPC_JMP:
+			stallEX = true;
+			REG_MM_AO = REG_EX_PC + //fix the jump statement//
+			break;
 
 		case OPC_BEQZ:	if(REG_EX_A==0)
 						REG_MM_AO =  //fix the jump statement//
@@ -376,6 +378,12 @@ void Processor::executeStage()
 }
 
 void Processor::fetchStage()  {
+	// wait for ID to be available
+	if(ID_run)  { // due to backward nature, if ID_run is true, it has been stalling
+		IF_run = true;
+		return;
+	}
+
 	REG_ID_IR = (((usint) iCache->readByte(REG_IF_PC)) << 8) + ((usint) iCache->readByte(REG_IF_PC));
 
 	ID_run = true;
@@ -387,6 +395,12 @@ void Processor::decodeStage()  {
 	if((!ID_run) || stallID)  {
 		return;
 	}
+
+	if(EX_run)  {
+		ID_run = true;
+		return;
+	}
+
 	REG_EX_IR = REG_ID_IR;
 
 	byte opcode = (REG_ID_IR & 0xf000) >> 12;
@@ -401,18 +415,50 @@ void Processor::decodeStage()  {
 		return;
 	}
 
+	EX_run = true;
+
 	// control class - HAZ
-	if((opcode == OPC_JMP) || (opcode == OPC_BEQZ))  {
+	if(opcode == OPC_JMP)  {
+		stallID = true;
+		
+		REG_EX_A = (REG_ID_IR & 0x0ff0) >> 4;
+		return;
+	}
+	if(opcode == OPC_BEQZ)  {
 		stallID = true;
 
-		
+		REG_EX_A = regFile->read((REG_ID_IR & 0x0f00) >> 8);
+		REG_EX_B = REG_ID_IR & 0x00ff;
 		return;
 	}
 	
-	// data class - HAZ
+	// data class
+	if((opcode == OPC_LD) || (opcode == OPC_ST))  {
+		REG_EX_A = regFile->read((REG_ID_IR & 0x00f0) >> 4);
+		REG_EX_B = REG_ID_IR & 0x000f;
+		return;
+	}
 
-	// arithmetic class
-	// logical class
+	// arithmetic class - HAZ
+	if((opcode >= OPC_ADD) && (opcode <= OPC_MUL))  {
+		REG_EX_A = regFile->read((REG_ID_IR & 0x00f0) >> 4);
+		REG_EX_B = regFile->read(REG_ID_IR & 0x000f);
+		return;
+	}
+	if(opcode == OPC_INC)  {
+		REG_EX_A = regFile->read((REG_ID_IR & 0x0f00) >> 8);
+		return;
+	}
+
+	// logical class - HAZ
+	if((opcode != OPC_NOT))  {
+		REG_EX_A = regFile->read((REG_ID_IR & 0x00f0) >> 4);
+		REG_EX_B = regFile->read(REG_ID_IR & 0x000f);
+		return;
+	}
+
+	// here, opcode == OPC_NOT
+	REG_EX_A = regFile->read((REG_ID_IR & 0x00f0) >> 4);
 }
 
 void Processor::memoryStage(){
