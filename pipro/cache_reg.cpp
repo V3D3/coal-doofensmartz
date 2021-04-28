@@ -227,13 +227,26 @@ private:
 	int stat_stalls_control = 0;
 
 	// declare IF registers here
+	byte REG_IF_PC = 0u; // first instruction
 	void fetchStage();
+
 	// declare ID registers here
+	usint REG_ID_IR = 0u; // add R0 to R0 and store in R0
+	byte  REG_ID_PC = 0u;
 	void decodeStage();
+
 	// declare EX registers here
+	usint REG_EX_IR = 0u;
+	byte  REG_EX_PC = 0u;
+	byte  REG_EX_A  = 0u;
+	byte  REG_EX_B  = 0u;
 	void executeStage();
+
 	// declare MM registers here
+	usint REG_MM_IR = 0u;
+	byte  REG_MM_AO = 0u;
 	void memoryStage();
+
 	// declare WB registers here
 	void writebackStage();
 
@@ -255,6 +268,30 @@ public:
 	bool isHalted();
 };
 
+Processor::Processor(std::fstream Icache, std::fstream Dcache, std::fstream RegFile)  {
+	iCache = new Cache(Icache);
+	dCache = new Cache(dCache);
+	regFile = new Cache(RegFile);
+
+
+}
+
+void Processor::run()  {
+	while(!isHalted())  {
+		cycle();
+	}
+}
+
+void Processor::cycle()  {
+	// to simulate parallelism we execute the pipeline stages
+	// in the order WB MEM EX ID IF in one cycle,
+	// so WB's buffer is cleared before MEM tries
+	// to write to it
+}
+
+bool Processor::isHalted()  {
+	return halted;
+}
 
 
 int main()
