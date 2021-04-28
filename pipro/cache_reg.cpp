@@ -215,24 +215,15 @@ private:
 	bool numMemReads = 0; 			// < 2
 	bool numMemWrites = 0; 			// < 2
 
-	int stat_instruction_count = 0;
-	int stat_instruction_count_arith = 0;
-	int stat_instruction_count_logic = 0;
-	int stat_instruction_count_data = 0;
-	int stat_instruction_count_control = 0;
-	int stat_instruction_count_halt = 0;
-	int stat_cycles = 0;
-	int stat_stalls = 0;
-	int stat_stalls_data = 0;
-	int stat_stalls_control = 0;
-
 	// declare IF registers here
 	byte REG_IF_PC = 0u; // first instruction
+	bool IF_run = true;
 	void fetchStage();
 
 	// declare ID registers here
 	usint REG_ID_IR = 0u; // add R0 to R0 and store in R0
 	byte  REG_ID_PC = 0u;
+	bool  ID_run = false;
 	void decodeStage();
 
 	// declare EX registers here
@@ -240,14 +231,21 @@ private:
 	byte  REG_EX_PC = 0u;
 	byte  REG_EX_A  = 0u;
 	byte  REG_EX_B  = 0u;
+	bool  EX_run = false;
 	void executeStage();
 
 	// declare MM registers here
 	usint REG_MM_IR = 0u;
 	byte  REG_MM_AO = 0u;
+	bool  MM_run = false;
 	void memoryStage();
 
 	// declare WB registers here
+	usint REG_WB_IR   = 0u;
+	byte  REG_WB_AO   = 0u;
+	byte  REG_WB_LMD  = 0u;
+	bool  REG_WB_COND = false;
+	bool  WB_run = false;
 	void writebackStage();
 
 	void flushPipeline();
@@ -266,14 +264,24 @@ public:
 
 	// is processor halted?
 	bool isHalted();
+
+	// stats
+	int stat_instruction_count = 0;
+	int stat_instruction_count_arith = 0;
+	int stat_instruction_count_logic = 0;
+	int stat_instruction_count_data = 0;
+	int stat_instruction_count_control = 0;
+	int stat_instruction_count_halt = 0;
+	int stat_cycles = 0;
+	int stat_stalls = 0;
+	int stat_stalls_data = 0;
+	int stat_stalls_control = 0;
 };
 
 Processor::Processor(std::fstream Icache, std::fstream Dcache, std::fstream RegFile)  {
 	iCache = new Cache(Icache);
 	dCache = new Cache(dCache);
 	regFile = new Cache(RegFile);
-
-
 }
 
 void Processor::run()  {
@@ -287,6 +295,7 @@ void Processor::cycle()  {
 	// in the order WB MEM EX ID IF in one cycle,
 	// so WB's buffer is cleared before MEM tries
 	// to write to it
+	stat_cycles++;
 }
 
 bool Processor::isHalted()  {
