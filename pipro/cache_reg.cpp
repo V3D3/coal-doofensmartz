@@ -329,58 +329,58 @@ void Processor::executeStage()
 	switch(opCode)
 	{
 		case 0 :	REG_MM_AO = REG_EX_A + REG_EX_B;	//setting the result
-					WB_run = true;	//skip to write back
 					break;	//break statement for the switch
 
 		case 1 :	REG_MM_AO = REG_EX_A - REG_EX_B;	//setting the result
-					WB_run = true;	//skip to write back
 					break;	//break statement for the switch
 
 		case 2 :	REG_MM_AO = REG_EX_A * REG_EX_B;	//setting the result
-					WB_run = true;	//skip to write back
 					break;	//break statement for the switch
 
 		case 3 :	REG_MM_A0 = REG_EX_A + 1;	//setting the result
 					break;	//break statement for the switch
 
 		case 4 :	REG_MM_AO = REG_EX_A & REG_EX_B;	//setting the result
-					WB_run = true;	//skip to write back
 					break;	//break statement for the switch
 
 		case 5 :	REG_MM_AO = REG_EX_A | REG_EX_B;	//setting the result
-					WB_run = true;	//skip to write back
 					break;	//break statement for the switch
 
 		case 6 :	REG_MM_AO = ~REG_EX_A;	//setting the result
-					WB_run = true;	//skip to write back
 					break;	//break statement for the switch
 
 		case 7 :	REG_MM_AO = REG_EX_A ^ REG_EX_B;	//setting the result
-					WB_run = true;	//skip to write back
 					break;	//break statement for the switch
 
 		case 8 :	REG_MM_AO = REG_EX_A + REG_EX_B;	//setting the result
-					MM_run = true;	//operate memory next
 					break;	//break statement for the switch
 
 		case 9 :	REG_MM_AO = REG_EX_A + REG_EX_B;	//setting the result
-					MM_run = true;	//operate memory next
 					break;	//break statement for the switch
 
 		case 10:	REG_MM_AO = REG_EX_PC + //fix the jump statement//
-					WB_run = true;	//skip to write back
 					break;	//break statement for the switch
 
 		case 11:	if(REG_EX_A==0)
 						REG_MM_AO =  //fix the jump statement//
-					WB_run = true;	//skip to write back
 					break;	//break statement for the switch
 
 		case 15:	REG_MM_AO = 
-					WB_run = true;	//skip to write back
 					break;	//break statement for the switch
 
 		default:	break;	//break statement for the switch
+	}
+
+	if(opCode==8 || opCode==9)
+	{
+		MM_run = true;	//move to memory operation
+		REG_MM_IR = REG_EX_IR;	//passing the instruction value
+	}
+
+	else
+	{
+		WB_run = true;	//move to writeback operation
+		REG_WB_IR = REG_EX_IR;	//passing the instruxtion value
 	}
 
 	EX_run = false;	//setting that the process is finished
