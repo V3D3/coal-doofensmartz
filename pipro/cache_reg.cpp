@@ -210,6 +210,22 @@ private:
 	bool stallMM = false;
 	bool stallWB = false;
 
+	int numRegistersRead = 0; 		// < 3
+	bool numRegistersWritten = 0;	// < 2
+	bool numMemReads = 0; 			// < 2
+	bool numMemWrites = 0; 			// < 2
+
+	int stat_instruction_count = 0;
+	int stat_instruction_count_arith = 0;
+	int stat_instruction_count_logic = 0;
+	int stat_instruction_count_data = 0;
+	int stat_instruction_count_control = 0;
+	int stat_instruction_count_halt = 0;
+	int stat_cycles = 0;
+	int stat_stalls = 0;
+	int stat_stalls_data = 0;
+	int stat_stalls_control = 0;
+
 	// declare IF registers here
 	void fetchStage();
 	// declare ID registers here
