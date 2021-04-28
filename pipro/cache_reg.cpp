@@ -307,10 +307,10 @@ public:
 	int stat_stalls_control = 0;
 };
 
-Processor::Processor(std::fstream Icache, std::fstream Dcache, std::fstream RegFile)  {
+Processor::Processor(std::fstream Icache, std::fstream Dcache, std::fstream regFile)  {
 	iCache = new Cache(Icache);	//allocating heap memory and calling cache constructors 
 	dCache = new Cache(dCache);	//allocating heap memory and calling cache constructors 
-	regFile = new Cache(RegFile);	//allocating heap memory and calling class constructors
+	this->regFile = new Cache(regFile);	//allocating heap memory and calling class constructors
 }
 
 void Processor::run()  {	//the run function to initiate the processor
@@ -352,50 +352,30 @@ void Processor::executeStage()
 	
 	switch(opCode)
 	{
-		case 0 :	REG_MM_AO = REG_EX_A + REG_EX_B;	//setting the result
-					break;	//break statement for the switch
+		case OPC_ADD :	REG_MM_AO = REG_EX_A + REG_EX_B; break;
+		case OPC_SUB :	REG_MM_AO = REG_EX_A - REG_EX_B; break;
+		case OPC_MUL :	REG_MM_AO = REG_EX_A * REG_EX_B; break;
+		case OPC_INC :	REG_MM_AO = REG_EX_A + 1; 		 break;
+		case OPC_AND :	REG_MM_AO = REG_EX_A & REG_EX_B; break;
+		case OPC_OR :	REG_MM_AO = REG_EX_A | REG_EX_B; break;
+		case OPC_NOT :	REG_MM_AO = ~REG_EX_A; 			 break;
+		case OPC_XOR :	REG_MM_AO = REG_EX_A ^ REG_EX_B; break;
+		case OPC_LD :	REG_MM_AO = REG_EX_A + REG_EX_B; break;
+		case OPC_ST :	REG_MM_AO = REG_EX_A + REG_EX_B; break;
 
-		case 1 :	REG_MM_AO = REG_EX_A - REG_EX_B;	//setting the result
-					break;	//break statement for the switch
+		case OPC_JMP:
+			stallEX = true;
+			REG_MM_AO = REG_EX_PC + //fix the jump statement//
+			break;
 
-		case 2 :	REG_MM_AO = REG_EX_A * REG_EX_B;	//setting the result
-					break;	//break statement for the switch
-
-		case 3 :	REG_MM_A0 = REG_EX_A + 1;	//setting the result
-					break;	//break statement for the switch
-
-		case 4 :	REG_MM_AO = REG_EX_A & REG_EX_B;	//setting the result
-					break;	//break statement for the switch
-
-		case 5 :	REG_MM_AO = REG_EX_A | REG_EX_B;	//setting the result
-					break;	//break statement for the switch
-
-		case 6 :	REG_MM_AO = ~REG_EX_A;	//setting the result
-					break;	//break statement for the switch
-
-		case 7 :	REG_MM_AO = REG_EX_A ^ REG_EX_B;	//setting the result
-					break;	//break statement for the switch
-
-		case 8 :	REG_MM_AO = REG_EX_A + REG_EX_B;	//setting the result
-					break;	//break statement for the switch
-
-		case 9 :	REG_MM_AO = REG_EX_A + REG_EX_B;	//setting the result
-					break;	//break statement for the switch
-
-		case 10:	REG_MM_AO = REG_EX_PC + //fix the jump statement//
-					break;	//break statement for the switch
-
-		case 11:	if(REG_EX_A==0)
+		case OPC_BEQZ:	if(REG_EX_A==0)
 						REG_MM_AO =  //fix the jump statement//
-					break;	//break statement for the switch
+					break;
 
-		case 15:	REG_MM_AO = 
-					break;	//break statement for the switch
-
-		default:	break;	//break statement for the switch
+		default:	break;
 	}
 
-	if(opCode==8 || opCode==9)
+	if((opCode==8) || (opCode==9))
 	{
 		MM_run = true;	//move to memory operation
 		REG_MM_IR = REG_EX_IR;	//passing the instruction value
@@ -404,13 +384,20 @@ void Processor::executeStage()
 	else
 	{
 		WB_run = true;	//move to writeback operation
-		REG_WB_IR = REG_EX_IR;	//passing the instruxtion value
+		REG_WB_AO = REG_MM_AO;
+		REG_WB_IR = REG_EX_IR;
 	}
 
 	EX_run = false;	//setting that the process is finished
 }
 
 void Processor::fetchStage()  {
+	// wait for ID to be available
+	if(ID_run)  { // due to backward nature, if ID_run is true, it has been stalling
+		IF_run = true;
+		return;
+	}
+
 	REG_ID_IR = (((usint) iCache->readByte(REG_IF_PC)) << 8) + ((usint) iCache->readByte(REG_IF_PC));
 
 	ID_run = true;
@@ -422,6 +409,12 @@ void Processor::decodeStage()  {
 	if((!ID_run) || stallID)  {
 		return;
 	}
+
+	if(EX_run)  {
+		ID_run = true;
+		return;
+	}
+
 	REG_EX_IR = REG_ID_IR;
 
 	byte opcode = (REG_ID_IR & 0xf000) >> 12;
@@ -436,18 +429,50 @@ void Processor::decodeStage()  {
 		return;
 	}
 
+	EX_run = true;
+
 	// control class - HAZ
-	if((opcode == OPC_JMP) || (opcode == OPC_BEQZ))  {
+	if(opcode == OPC_JMP)  {
+		stallID = true;
+		
+		REG_EX_A = (REG_ID_IR & 0x0ff0) >> 4;
+		return;
+	}
+	if(opcode == OPC_BEQZ)  {
 		stallID = true;
 
-		
+		REG_EX_A = regFile->read((REG_ID_IR & 0x0f00) >> 8);
+		REG_EX_B = REG_ID_IR & 0x00ff;
 		return;
 	}
 	
-	// data class - HAZ
+	// data class
+	if((opcode == OPC_LD) || (opcode == OPC_ST))  {
+		REG_EX_A = regFile->read((REG_ID_IR & 0x00f0) >> 4);
+		REG_EX_B = REG_ID_IR & 0x000f;
+		return;
+	}
 
-	// arithmetic class
-	// logical class
+	// arithmetic class - HAZ
+	if((opcode >= OPC_ADD) && (opcode <= OPC_MUL))  {
+		REG_EX_A = regFile->read((REG_ID_IR & 0x00f0) >> 4);
+		REG_EX_B = regFile->read(REG_ID_IR & 0x000f);
+		return;
+	}
+	if(opcode == OPC_INC)  {
+		REG_EX_A = regFile->read((REG_ID_IR & 0x0f00) >> 8);
+		return;
+	}
+
+	// logical class - HAZ
+	if((opcode != OPC_NOT))  {
+		REG_EX_A = regFile->read((REG_ID_IR & 0x00f0) >> 4);
+		REG_EX_B = regFile->read(REG_ID_IR & 0x000f);
+		return;
+	}
+
+	// here, opcode == OPC_NOT
+	REG_EX_A = regFile->read((REG_ID_IR & 0x00f0) >> 4);
 }
 
 void Processor::memoryStage(){
