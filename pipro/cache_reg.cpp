@@ -434,7 +434,47 @@ void Processor::decodeStage()  {
 	// arithmetic class
 	// logical class
 }
-
+void Processor::memoryStage(){
+	if(!MM_run || stallMM)
+	{
+		return;
+	}
+	usint opCode = REG_MM_IR >> 12;
+	if(opCode == 9)
+	{
+		dCache->writeByte(REG_MM_AO,REG_EX_B);
+		numMemWrites++;
+	}
+	else if(opCode == 8)
+	{
+		REG_WB_LMD = dCache->readByte(REG_MM_AO);
+		REG_WB_IR = REG_MM_IR;
+		REG_WB_AO = REG_MM_AO;
+		WB_run = true;
+		numMemReads++;
+	}
+	MM_run = false;
+	return;
+}
+void Processor::writebackStage(){
+	if(!WB_run || stallWB)
+	{
+		return;
+	}
+	usint opCode = REG_WB_IR >> 12;
+	if(opCode == 8) 
+	{
+		byte offset = (byte)(REG_WB_IR & 15); 
+		regFile->writeByte(offset, REG_WB_LMD);
+	}
+	else 
+	{
+		usint offset = REG_WB_IR << 4;
+		offset = offset >> 12; 
+		regFile->writeByte((byte)offset, REG_WB_AO);
+	}
+	MM_run = false;
+}
 int main()
 {
 	std::ifstream Icache, Dcache, RegFile;	//creating objects for file handling
