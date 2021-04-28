@@ -4,6 +4,8 @@
 #include <iterator>
 #include <set>
 #include <cstring>
+#include <vector>
+#include <climits>
 
 typedef unsigned int uint;
 typedef unsigned short usint;
@@ -57,13 +59,13 @@ class Cache
 {
 	uint cacheSize = 256;
 	uint blockSize = 4;
-	std::fstream srcFile;
+	std::ifstream * srcFile;
 	std::vector<uint> sets;
 	int num_of_reads = 0;
 	int num_of_writes = 0;
 	//Little Endian
 public:
-	Cache(std::fstream fp);
+	Cache(std::ifstream * fp);
 	~Cache();
 	uint readBlock(byte address);
 	byte readByte(byte address);
@@ -74,19 +76,21 @@ public:
 	bool writeBusy();
 	void updateSrcFile();
 };
-Cache::Cache(std::fstream fp){
+Cache::Cache(std::ifstream * fp){
 	this->srcFile = fp;
-	sets = vector<uint> (cacheSize,0);
+	sets = std::vector<uint> (cacheSize, 0);
+
 	std::string hexCode;
 	uint value;
 	int blockNum = 0;
 	int offset = 0;
-	while(fp >> hexCode){
+	while(*fp >> hexCode){
 		if(offset == 4)
 		{
 			offset = 0;
 			blockNum++;
 		}
+
 		value = std::stoi(hexCode,0,16);
 		for(int i = 0; i < offset; i++)
 		{
@@ -100,7 +104,7 @@ uint Cache::readBlock(byte address){
 	num_of_reads++;
 	return sets[address >> 2];
 }
-usint Cache::readByte(byte address){
+byte Cache::readByte(byte address){
 	uint data = readBlock(address);
 	uint offset = address & (blockSize-1);
 	for(int i = offset; i < 3; i++)
@@ -155,12 +159,12 @@ void Cache::resetAccesses(){
 class RegFile
 {
 	int regSize = 16;
-	std::fstream srcFile;
+	std::ifstream * srcFile;
 	std::vector<byte> RF;
 	int num_of_reads = 0;
 	int num_of_writes = 0;
 public:
-	RegFile(std::ifstream& fp);
+	RegFile(std::ifstream * fp);
 	~RegFile();
 	byte read(byte index);
 	void write(byte index, byte data);
@@ -169,18 +173,20 @@ public:
 	bool readBusy();
 	bool writeBusy();
 };
-RegFile::RegFile(std::ifstream& fp){
+
+RegFile::RegFile(std::ifstream * fp){
 	this->srcFile = fp;
-	RF = vector<byte> (regSize);
+	RF = std::vector<byte> (regSize);
 	std::string hexCode;
 	byte value;
 	int regNum = 0;
-	while(fp >> hexCode){
+	while(*fp >> hexCode){
 		value = std::stoi(hexCode,0,16);
 		RF[regNum] = value;
 		regNum++;
 	}
 };
+
 byte RegFile::read(byte index){
 	num_of_reads++;
 	return RF[index];
@@ -269,7 +275,7 @@ private:
 	void writeRegister(int reg, byte val);
 public:
 	// init with caches and rf
-	Processor(std::ifstream& Icache, std::ifstream& Dcache, std::ifstream& RegFile);
+	Processor(std::ifstream * Icache, std::ifstream * Dcache, std::ifstream * RegFile);
 	~Processor();
 
 	// initiates run, runs until halted
@@ -293,9 +299,9 @@ public:
 	int stat_stalls_control = 0;
 };
 
-Processor::Processor(std::fstream Icache, std::fstream Dcache, std::fstream regFile)  {
+Processor::Processor(std::ifstream * Icache, std::ifstream * Dcache, std::ifstream * regFile)  {
 	iCache = new Cache(Icache);
-	dCache = new Cache(dCache);
+	dCache = new Cache(Dcache);
 	this->regFile = new RegFile(regFile);
 }
 
@@ -493,13 +499,13 @@ void Processor::writebackStage(){
 	if(opCode == 8) 
 	{
 		byte offset = (byte)(REG_WB_IR & 15); 
-		regFile->writeByte(offset, REG_WB_LMD);
+		regFile->write(offset, REG_WB_LMD);
 	}
 	else 
 	{
 		usint offset = REG_WB_IR << 4;
 		offset = offset >> 12; 
-		regFile->writeByte((byte)offset, REG_WB_AO);
+		regFile->write((byte)offset, REG_WB_AO);
 	}
 	MM_run = false;
 }
@@ -512,7 +518,7 @@ int main()
 	Dcache.open("DCache.txt");	//getting the filepointer of the data cache file
 	RegFile.open("RF.txt");	//the input for the register file
 
-	Processor processor(Icache, Dcache, RegFile);	//sending the adress class as pointers/*change class name*/
+	Processor processor(&Icache, &Dcache, &RegFile);	//sending the adress class as pointers/*change class name*/
 	processor.run();	//running the processor
 	return 0;	//exiting the code
 }
