@@ -6,7 +6,7 @@
 #include <cstring>
 
 typedef unsigned int uint;
-typedef unsigned short int usint;
+typedef unsigned short usint;
 typedef unsigned char byte;
 
 #define IF 0
@@ -14,6 +14,20 @@ typedef unsigned char byte;
 #define EX 2
 #define MM 3
 #define WB 4
+
+#define OPC_ADD 0
+#define OPC_SUB 1
+#define OPC_MUL 2
+#define OPC_INC 3
+#define OPC_AND 4
+#define OPC_OR 5
+#define OPC_NOT 6
+#define OPC_XOR 7
+#define OPC_LD 8
+#define OPC_ST 9
+#define OPC_JMP 10
+#define OPC_BEQZ 11
+#define OPC_HALT 15
 
 
 int log2(uint x)
@@ -142,12 +156,12 @@ void Cache::resetAccesses(){
 class RegFile
 {
 	int regSize = 16;
-	std::fstream srcFile;
+	std::ifstream& srcFile;
 	std::vector<usint> RF;
 	int num_of_reads = 0;
 	int num_of_writes = 0;
 public:
-	RegFile(std::fstream fp);
+	RegFile(std::ifstream& fp);
 	~RegFile();
 	usint read(usint index);
 	void write(usint index, usint data);
@@ -156,9 +170,9 @@ public:
 	bool readBusy();
 	bool writeBusy();
 };
-RegFile::RegFile(std::fstream fp){
+RegFile::RegFile(std::ifstream& fp){
 	this->srcFile = fp;
-	RF = vector<uint> (regSize);
+	RF = std::vector<usint> (regSize);
 	std::string hexCode;
 	usint value;
 	int regNum = 0;
@@ -254,7 +268,7 @@ private:
 	void writeRegister(int reg, byte val);
 public:
 	// init with caches and rf
-	Processor(std::fstream Icache, std::fstream Dcache, std::fstream RegFile);
+	Processor(std::ifstream& Icache, std::ifstream& Dcache, std::ifstream& RegFile);
 	~Processor();
 
 	// initiates run, runs until halted
@@ -296,10 +310,39 @@ void Processor::cycle()  {
 	// so WB's buffer is cleared before MEM tries
 	// to write to it
 	stat_cycles++;
+
+	writebackStage();
+	memoryStage();
+	executeStage();
+	decodeStage();
+	fetchStage();
 }
 
 bool Processor::isHalted()  {
 	return halted;
+}
+
+void Processor::fetchStage()  {
+	REG_ID_IR = iCache->readByte(REG_IF_PC);
+	ID_run = true;
+}
+
+void Processor::decodeStage()  {
+	if((!ID_run) || stallID)  {
+		return;
+	}
+	REG_EX_IR = REG_ID_IR;
+
+	byte opcode = (REG_ID_IR & 0xf000) >> 12;
+	
+	if(opcode == OPC_HALT)  {
+		IF_run = false;
+		return;
+	}
+
+	if((opcode == OPC_JMP) || (opcode == OPC_BEQZ))  {
+
+	}
 }
 
 
@@ -311,7 +354,7 @@ int main()
 	Dcache.open("DCache.txt");	//getting the filepointer of the data cache file
 	RegFile.open("RF.txt");	//the input for the register file
 
-	$className$ processor(Icache, Dcache, RegFile);	//sending the adress class as pointers/*change class name*/
+	Processor processor(Icache, Dcache, RegFile);	//sending the adress class as pointers/*change class name*/
 	processor.process();	/*change method name*/
 	return 0;	//exiting the code
 }
