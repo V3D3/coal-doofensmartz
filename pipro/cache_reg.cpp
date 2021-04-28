@@ -189,6 +189,21 @@ void RegFile::resetAccesses(){
 
 
 
+class Processor  {
+private:
+	Cache* iCache, dCache;
+	RegFile regFile;
+
+	bool halted = false;;
+
+	
+public:
+	Processor();
+	~Processor();
+
+	bool isHalted();
+}
+
 
 int main()
 {
