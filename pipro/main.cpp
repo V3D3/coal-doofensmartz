@@ -322,7 +322,9 @@ void Processor::run()  {	//the run function to initiate the processor
 		if((EX_run || MM_run || WB_run) == false)  {
 			halted = true;
 			haltScheduled = false;
-			stat_instruction_count = stat_instruction_count + stat_instruction_count_halt;	//as halt wont reach the writeback
+			stat_instruction_count = stat_instruction_count_arith + stat_instruction_count_control + 
+                                     stat_instruction_count_data + stat_instruction_count_logic +
+                                     stat_instruction_count_halt;	//as halt wont reach the writeback
 			return;
 		}
 		cycle();	//call the cycle function, the equivalent of one cycle of the processor
@@ -399,7 +401,6 @@ void Processor::executeStage()
 			else
 			{
 				REG_MM_AO =  REG_EX_PC;
-
 			}
 			break;
 
@@ -610,7 +611,11 @@ void Processor::memoryStage(){
 		REG_WB_IR = REG_MM_IR;
 		REG_WB_AO = REG_MM_AO;
 		WB_run = true;
+	}  else  {
+		MM_run = false;
+		return;
 	}
+
 	MM_run = false;
 	stat_instruction_count_data++;	//counting the number of memory instructions
 	return;
@@ -635,7 +640,6 @@ void Processor::writebackStage(){
 			REG_IF_PC = REG_WB_AO;
 			flushPipeline();
 		}
-		stat_instruction_count++;
 		return;
 	}
 	if(opCode == OPC_LD) 
@@ -649,7 +653,6 @@ void Processor::writebackStage(){
 	}
 	regFile->setStatus(offset, false);
 	WB_run = false;
-	stat_instruction_count++;	//counting the number of instructions implemented
 }
 
 void Processor::flushPipeline()  {
