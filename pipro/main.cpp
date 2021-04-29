@@ -323,7 +323,7 @@ void Processor::run()  {	//the run function to initiate the processor
 		if((EX_run || MM_run || WB_run) == false)  {
 			halted = true;
 			haltScheduled = false;
-			stat_instruction_count = stat_instruction_count + stat_instruction_count_halt;	//as halt wont reach the writeback
+			stat_instruction_count = stat_instruction_count_logic + stat_instruction_count_control + stat_instruction_count_data + stat_instruction_count_arith + stat_instruction_count_halt;	//as halt wont reach the writeback
 			return;
 		}
 		cycle();	//call the cycle function, the equivalent of one cycle of the processor
@@ -638,7 +638,6 @@ void Processor::writebackStage(){
 	}
 	regFile->setStatus(offset, false);
 	WB_run = false;
-	stat_instruction_count++;	//counting the number of instructions implemented
 }
 
 void Processor::flushPipeline()  {
