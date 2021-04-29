@@ -3,9 +3,10 @@
 #include <cassert>
 #include <iterator>
 #include <set>
-#include <cstring>
+#include <string>
 #include <vector>
 #include <climits>
+#include <iomanip>
 
 /*-------------------------------------------------------------------------------------------------
 *    Author   : Team DOOFENSMARTZ
@@ -89,7 +90,7 @@ public:
 	void writeBlock(byte address, uint data);
 	void writeByte(byte address, byte data);
 
-
+	void dumpCache(std::string filename);
 };
 
 Cache::Cache(std::ifstream * fp){
@@ -148,6 +149,21 @@ void Cache::writeByte(byte address, byte data){
 	}
 	mask = UINT_MAX - mask;
 	sets[blockNum] = (sets[blockNum] & mask) + data;
+}
+void Cache::dumpCache(std::string filename)  {
+	std::ofstream outfile;
+
+	outfile.open(filename, std::ofstream::trunc);
+	
+	int i;
+	char byteString[2];
+
+	outfile << std::setfill('0') << std::setw(2);
+	for(i = 0; i < cacheSize; i++)  {
+		outfile << readByte(i) << std::endl;
+	}
+
+	outfile.close();
 }
 
 /****************************************************************************************************
@@ -270,6 +286,9 @@ public:
 
 	// is processor halted?
 	bool isHalted();
+
+	// dump stats and cache
+	void dumpdata(std::string fnameCache, std::string fnameOut);
 
 	// stats
 	int stat_instruction_count = 0;
@@ -642,6 +661,25 @@ void Processor::flushPipeline()  {
 	stallWB = false;
 }
 
+void Processor::dumpdata(std::string fnameCache, std::string fnameOut)  {
+	dCache->dumpCache(fnameCache);
+
+	std::ofstream outFile;
+	outFile.open(fnameOut);
+
+	outFile << "Total number of instructions executed: " << stat_instruction_count << std::endl;
+	outFile << "Number of instructions in each class" << std::endl;
+	outFile << "Arithmetic instructions              : " << stat_instruction_count_arith << std::endl;
+	outFile << "Logical instructions				 : " << stat_instruction_count_logic << std::endl;
+	outFile << "Data instructions					 : " << stat_instruction_count_data << std::endl;
+	outFile << "Control instructions				 : " << stat_instruction_count_control << std::endl;
+	outFile << "Halt instructions 					 : " << stat_instruction_count_halt << std::endl;
+	outFile << "Cycles Per Instruction				 : " << ((double) stat_cycles / stat_instruction_count) << std::endl;
+	outFile << "Total number of stalls 				 : " << stat_stalls << std::endl;
+	outFile << "Data stalls (RAW)					 : " << stat_stalls_data << std::endl;
+	outFile << "Control stalls 						 : " << stat_stalls_control << std::endl;
+}
+
 /*-------------------------------------------------------------------------------------------------
 *    Function Name : main
 *    Args          : Nil
@@ -658,5 +696,8 @@ int main()
 
 	Processor processor(&Icache, &Dcache, &RegFile);	//sending the adress class as pointers/*change class name*/
 	processor.run();	//running the processor
-	return 0;	//exiting the code
+
+	processor.dumpdata("DCache.out.txt", "Output.txt");
+
+	return 0;
 }
