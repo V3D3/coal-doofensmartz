@@ -37,6 +37,11 @@ typedef unsigned char byte;
 #define OPC_BEQZ 11
 #define OPC_HALT 15
 
+#define PIPE_IF 1
+#define PIPE_ID 2
+#define PIPE_EX 3
+#define PIPE_MM 4
+#define PIPE_WB 5
 
 int log2(uint x)	//a function to find value of log of a number wrt base 2
 {
@@ -111,6 +116,8 @@ Cache::Cache(std::ifstream * fp){
 		sets[blockNum] += value;
 		offset++;
 	}
+
+	fp->close();
 }
 uint Cache::readBlock(byte address){
 	num_of_reads++;
@@ -173,20 +180,30 @@ class RegFile
 	int regSize = 16;
 	std::ifstream * srcFile;
 	std::vector<byte> RF;
-	std::vector<pair<bool, int>> status;	//vector of pairs to manage hazards
+	std::vector<std::pair<bool, int>> status;	//vector of pairs to manage hazards
 	int num_of_reads = 0;
 	int num_of_writes = 0;
 public:
 	RegFile(std::ifstream * fp);
 	~RegFile();
+
+	// read a byte from R-index
 	byte read(byte index);
+	// write a byte to R-index
 	void write(byte index, byte data);
+	// 
 	void updateSrcFile();
+	// reset the access counts (new cycle)
 	void resetAccesses();
+	// are the read ports busy?
 	bool readBusy();
+	// is the write port busy?
 	bool writeBusy();
-	void setStatus(byte index, bool currStatus);
-	bool isOpen(byte index);
+	// sets status of a register - true indicates it is being written to
+	// currStage indicates the pipeline stage of the instruction writing
+	void setStatus(byte index, bool currStatus, int currStage);
+	// returns stage if not open, else 0
+	int isOpen(byte index);
 };
 
 RegFile::RegFile(std::ifstream * fp){
@@ -195,6 +212,7 @@ RegFile::RegFile(std::ifstream * fp){
 	for(int i=0; i<regSize; i++)
 		status.push_back({true, 0});	//initialising the status
 
+	// read file into regfile
 	std::string hexCode;
 	byte value;
 	int regNum = 0;
@@ -203,6 +221,8 @@ RegFile::RegFile(std::ifstream * fp){
 		RF[regNum] = value;
 		regNum++;
 	}
+
+	fp->close();
 };
 
 byte RegFile::read(byte index){
@@ -232,11 +252,11 @@ void RegFile::resetAccesses(){
  	return false;
  }
 
-bool RegFile::isOpen(byte index){
-	return status[index];
+int RegFile::isOpen(byte index){
+	return status[index].first * status[index].second;
 }
-void RegFile::setStatuset(byte index, bool currStatus){
-	status[index] = currStatus;
+void RegFile::setStatus(byte index, bool currStatus, int currStage){
+	status[index] = std::make_pair(currStatus, currStage);
 }
 /****************************************************************************************************
  * 	Class Name	: Processor
