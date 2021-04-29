@@ -381,8 +381,10 @@ void Processor::executeStage()
 		case OPC_XOR :	REG_MM_AO = REG_EX_A ^ REG_EX_B;
 						stat_instruction_count_logic++; 	break;
 
-		case OPC_LD :	REG_MM_AO = REG_EX_A + REG_EX_B; break;
-		case OPC_ST :	REG_MM_AO = REG_EX_A + REG_EX_B; break;
+		case OPC_LD :	REG_MM_AO = REG_EX_A + REG_EX_B;
+						stat_instruction_count_data++;	break;
+		case OPC_ST :	REG_MM_AO = REG_EX_A + REG_EX_B;
+						stat_instruction_count_data++;	break;
 
 		case OPC_JMP:
 			stallEX = true;
@@ -399,19 +401,7 @@ void Processor::executeStage()
 		default:	break;
 	}
 
-	if((opCode==OPC_LD) || (opCode==OPC_ST))
-	{
-		MM_run = true;	//move to memory operation
-		REG_MM_IR = REG_EX_IR;	//passing the instruction value
-	}
-
-	else
-	{
-		WB_run = true;	//move to writeback operation
-		REG_WB_AO = REG_MM_AO;
-		REG_WB_IR = REG_EX_IR;
-	}
-
+	MM_run = true;	//marking that next instruction to be implemented is memmory 
 	EX_run = false;	//setting that the stage is finished
 }
 
@@ -602,7 +592,6 @@ void Processor::memoryStage(){
 		WB_run = true;
 	}
 	MM_run = false;
-	stat_instruction_count_data++;	//counting the number of memory instructions
 	return;
 }
 
