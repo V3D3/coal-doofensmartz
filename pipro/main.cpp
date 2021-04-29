@@ -363,7 +363,7 @@ void Processor::executeStage()
 		case OPC_SUB :	REG_MM_AO = REG_EX_A - REG_EX_B;
 						stat_instruction_count_arith++; break;
 
-		case OPC_MUL :	REG_MM_AO = REG_EX_A * REG_EX_B; 
+		case OPC_MUL :	REG_MM_AO = (byte) (((char) REG_EX_A) * ((char) REG_EX_B)); 
 						stat_instruction_count_arith++; break;
 
 		case OPC_INC :	REG_MM_AO = REG_EX_A + 1; 		 
@@ -416,8 +416,7 @@ void Processor::executeStage()
 }
 
 void Processor::fetchStage()  {
-	// wait for ID to be available
-	if(!IF_run)  { // due to backward nature, if ID_run is true, it has been stalling
+	if(!IF_run)  {
 		return;
 	}
 	if(ID_run || stallID)  { // due to backward nature, if ID_run is true, it has been stalling
@@ -425,7 +424,7 @@ void Processor::fetchStage()  {
 		return;
 	}
 
-	REG_ID_IR = (((usint) iCache->readByte(REG_IF_PC)) << 8) + ((usint) iCache->readByte(REG_IF_PC+1));
+	REG_ID_IR = (((usint) iCache->readByte(REG_IF_PC)) << 8) + ((usint) iCache->readByte(REG_IF_PC + 1));
 	ID_run = true;
 
 	REG_IF_PC += 2;
