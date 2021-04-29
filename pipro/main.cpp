@@ -83,13 +83,15 @@ class Cache	//the cache class that is being used for Data and instrution caches
 	//Little Endian
 public:
 	Cache(std::ifstream * fp);
-	~Cache();
+	
 	uint readBlock(byte address);
 	byte readByte(byte address);
 	void writeBlock(byte address, uint data);
 	void writeByte(byte address, byte data);
-	void updateSrcFile();
+
+
 };
+
 Cache::Cache(std::ifstream * fp){
 	this->srcFile = fp;
 	sets = std::vector<uint> (cacheSize, 0);
@@ -161,15 +163,11 @@ class RegFile
 	std::vector<bool> status;
 public:
 	RegFile(std::ifstream * fp);
-	~RegFile();
 
-    
 	// read a byte from R-index
 	byte read(byte index);
 	// write a byte to R-index
 	void write(byte index, byte data);
-    // 
-	void updateSrcFile();
     
 	// sets status of a register - true indicates it is being written to
 	void setStatus(byte index, bool currStatus);
@@ -355,12 +353,13 @@ void Processor::executeStage()
 
 		case OPC_JMP:
 			stallEX = true;
-			REG_MM_AO = REG_EX_PC + //fix the jump statement//
+			REG_MM_AO = REG_EX_PC + (byte) ((usint) REG_EX_A << 1);
 			break;
 
-		case OPC_BEQZ:	if(REG_EX_A==0)
-						REG_MM_AO =  //fix the jump statement//
-					break;
+		case OPC_BEQZ:
+			stallEX = true;
+			REG_MM_AO =  REG_EX_PC + (!REG_EX_A) * ((byte) ((usint) REG_EX_B << 1));
+			break;
 
 		default:	break;
 	}
@@ -579,6 +578,8 @@ void Processor::writebackStage(){
 		// if PC didn't change, carry on with decoding
 		if(REG_IF_PC == REG_WB_AO)  {
 			ID_run = true;
+			stallID = false;
+			stallEX = false;
 		// if it did, flush pipeline
 		}  else  {
 			REG_IF_PC = REG_WB_AO;
