@@ -224,11 +224,6 @@ private:
 	bool stallMM = false;
 	bool stallWB = false;
 
-	int numRegistersRead = 0; 		// < 3
-	bool numRegistersWritten = 0;	// < 2
-	bool numMemReads = 0; 			// < 2
-	bool numMemWrites = 0; 			// < 2
-
 	// declare IF registers here
 	byte REG_IF_PC = 0u; // first instruction
 	bool IF_run = true;
@@ -551,7 +546,6 @@ void Processor::memoryStage(){
 	if(opCode == OPC_ST)
 	{
 		dCache->writeByte(REG_MM_AO,REG_EX_B);
-		numMemWrites++;
 	}
 	else if(opCode == OPC_LD)
 	{
@@ -559,7 +553,6 @@ void Processor::memoryStage(){
 		REG_WB_IR = REG_MM_IR;
 		REG_WB_AO = REG_MM_AO;
 		WB_run = true;
-		numMemReads++;
 	}
 	MM_run = false;
 	return;
