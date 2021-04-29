@@ -253,7 +253,7 @@ void RegFile::resetAccesses(){
  }
 
 int RegFile::isOpen(byte index){
-	return status[index].first * status[index].second;
+	return (1 - status[index].first) * status[index].second;
 }
 void RegFile::setStatus(byte index, bool currStatus, int currStage){
 	status[index] = std::make_pair(currStatus, currStage);
@@ -352,6 +352,12 @@ Processor::Processor(std::ifstream * Icache, std::ifstream * Dcache, std::ifstre
 	this->regFile = new RegFile(regFile);
 }
 
+Processor::~Processor()  {
+	delete iCache;
+	delete dCache;
+	delete regFile;
+}
+
 void Processor::run()  {	//the run function to initiate the processor
 	while(!haltScheduled && !isHalted())  {	//while halt is not called execute instructions
 		cycle();	//call the cycle function, the equivalent of one cycle of the processor
@@ -384,7 +390,6 @@ bool Processor::isHalted()  {
 	return halted;
 }
 
-
 void Processor::executeStage()
 {
 	int opCode = REG_EX_IR >> 12;
@@ -414,7 +419,7 @@ void Processor::executeStage()
 		default:	break;
 	}
 
-	if((opCode==8) || (opCode==9))
+	if((opCode==OPC_LD) || (opCode==OPC_ST))
 	{
 		MM_run = true;	//move to memory operation
 		REG_MM_IR = REG_EX_IR;	//passing the instruction value
@@ -470,6 +475,25 @@ void Processor::decodeStage()  {
 
 	EX_run = true;
 
+	// data hazard care
+	if(((opcode >= OPC_ADD) && (opcode <= OPC_XOR)) || (opcode == OPC_LD))  {
+		byte regindex = (REG_ID_IR & 0x0f00) >> 8;
+		regFile->setStatus(regindex, false, PIPE_ID);
+	}
+
+	// data hazard stall
+	if((opcode == OPC_ADD) || 
+	   (opcode == OPC_SUB) || 
+	   (opcode == OPC_MUL) || 
+	   (opcode == OPC_AND) || 
+	   (opcode == OPC_OR) || 
+	   (opcode == OPC_XOR))  {
+		int rstat1 = regFile->isOpen((REG_ID_IR & 0x0f00) >> 8);
+		int rstat2 = regFile->isOpen((REG_ID_IR & 0x00f0) >> 8);
+
+		if(rstat1 )
+	}
+
 	// control class - HAZ
 	if(opcode == OPC_JMP)  {
 		stallID = true;
@@ -520,12 +544,12 @@ void Processor::memoryStage(){
 		return;
 	}
 	usint opCode = REG_MM_IR >> 12;
-	if(opCode == 9)
+	if(opCode == OPC_ST)
 	{
 		dCache->writeByte(REG_MM_AO,REG_EX_B);
 		numMemWrites++;
 	}
-	else if(opCode == 8)
+	else if(opCode == OPC_LD)
 	{
 		REG_WB_LMD = dCache->readByte(REG_MM_AO);
 		REG_WB_IR = REG_MM_IR;
@@ -543,18 +567,55 @@ void Processor::writebackStage(){
 		return;
 	}
 	usint opCode = REG_WB_IR >> 12;
-	if(opCode == 8) 
+	if((opCode == OPC_JMP) || (opCode == OPC_BEQZ))  {
+		// if PC didn't change, carry on with decoding
+		if(REG_IF_PC == REG_WB_AO)  {
+			ID_run = true;
+		// if it did, flush pipeline
+		}  else  {
+			REG_IF_PC = REG_WB_AO;
+			flushPipeline();
+		}
+		return;
+	}
+	if(opCode == OPC_LD) 
 	{
-		byte offset = (byte)(REG_WB_IR & 15); 
+		byte offset = (byte) ((REG_WB_IR & 0x0f00) >> 8); 
 		regFile->write(offset, REG_WB_LMD);
 	}
 	else 
 	{
-		usint offset = REG_WB_IR << 4;
-		offset = offset >> 12; 
+		usint offset = (REG_WB_IR & 0x0f00) >> 8;
 		regFile->write((byte)offset, REG_WB_AO);
 	}
 	MM_run = false;
+}
+
+void Processor::flushPipeline()  {
+	IF_run = true;
+	ID_run = false;
+	EX_run = false;
+	MM_run = false;
+	WB_run = false;
+
+	REG_ID_IR = 0u;
+	REG_ID_PC = 0u;
+	REG_EX_A = 0u;
+	REG_EX_B = 0u;
+	REG_EX_IR = 0u;
+	REG_EX_PC = 0u;
+	REG_MM_AO = 0u;
+	REG_MM_IR = 0u;
+	REG_WB_AO = 0u;
+	REG_WB_IR = 0u;
+	REG_WB_COND = 0;
+	REG_WB_LMD = 0u;
+
+	stallIF = false;
+	stallID = false;
+	stallEX = false;
+	stallMM = false;
+	stallWB = false;
 }
 
 /*-------------------------------------------------------------------------------------------------
