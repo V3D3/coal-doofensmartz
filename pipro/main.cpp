@@ -210,6 +210,7 @@ byte RegFile::read(byte index){
 	return RF[index];
 }
 void RegFile::write(byte index,byte data){
+    if(index == 0)  {return;}
 	RF[index] = data;
 }
 bool RegFile::isOpen(byte index){
@@ -260,6 +261,7 @@ private:
 	// declare MM registers here
 	usint REG_MM_IR = 0u;
 	byte  REG_MM_AO = 0u;
+    bool  REG_MM_COND = false;
 	bool  MM_run = false;
 	void memoryStage();
 
@@ -594,6 +596,13 @@ void Processor::memoryStage(){
 	if(opCode == OPC_ST)
 	{
 		dCache->writeByte(REG_MM_AO,REG_EX_B);
+		MM_run = false;
+        REG_WB_AO = 0u;
+        REG_WB_IR = 0u;
+        REG_WB_LMD = 0u;
+        REG_WB_COND = false;
+        WB_run = true;
+		return;
 	}
 	else if(opCode == OPC_LD)
 	{
@@ -603,6 +612,11 @@ void Processor::memoryStage(){
 		WB_run = true;
 	}  else  {
 		MM_run = false;
+        REG_WB_AO = REG_MM_AO;
+        REG_WB_IR = REG_MM_IR;
+        REG_WB_LMD = 0u;
+        REG_WB_COND = REG_MM_COND;
+        WB_run = true;
 		return;
 	}
 
