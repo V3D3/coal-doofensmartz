@@ -367,6 +367,7 @@ void Processor::run()  {
 			stat_instruction_count = stat_instruction_count_arith + stat_instruction_count_control + 
                                      stat_instruction_count_data + stat_instruction_count_logic +
                                      stat_instruction_count_halt;	//as halt wont reach the writeback
+            stat_cycles += 3;	//Run EX,MM,WB for halt instruction(not actually necessary)
 			return;
 		}
 		cycle();	//call the cycle function, the equivalent of one cycle of the processor
@@ -635,6 +636,7 @@ void Processor::memoryStage(){
 	{
 		return;
 	}
+	MM_run = false;
 	usint opCode = REG_MM_IR >> 12;
 	byte offset = (byte) ((REG_MM_IR & 0x0f00) >> 8);
 	if((opCode == OPC_JMP) || (opCode == OPC_BEQZ))  {
