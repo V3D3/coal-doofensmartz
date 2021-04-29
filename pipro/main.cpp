@@ -156,12 +156,11 @@ void Cache::dumpCache(std::string filename)  {
 	outfile.open(filename, std::ofstream::trunc);
 	
 	uint i;
-	outfile << std::setfill('0') << std::setw(2);
+	outfile << std::setfill('0') << std::setw(2) << std::hex;
 
 	for(i = 0; i < cacheSize; i++)  {
-		outfile << readByte(i) << std::endl;
+		outfile << std::setw(2) << ((int) readByte(i)) << std::endl;
 	}
-
 	outfile.close();
 }
 
@@ -323,7 +322,7 @@ void Processor::run()  {	//the run function to initiate the processor
 		if((EX_run || MM_run || WB_run) == false)  {
 			halted = true;
 			haltScheduled = false;
-			stat_instruction_count = stat_instruction_count_logic + stat_instruction_count_control + stat_instruction_count_data + stat_instruction_count_arith + stat_instruction_count_halt;	//as halt wont reach the writeback
+			stat_instruction_count = stat_instruction_count + stat_instruction_count_halt;	//as halt wont reach the writeback
 			return;
 		}
 		cycle();	//call the cycle function, the equivalent of one cycle of the processor
@@ -363,7 +362,7 @@ void Processor::executeStage()
 		case OPC_SUB :	REG_MM_AO = REG_EX_A - REG_EX_B;
 						stat_instruction_count_arith++; break;
 
-		case OPC_MUL :	REG_MM_AO = (byte) (((char) REG_EX_A) * ((char) REG_EX_B)); 
+		case OPC_MUL :	REG_MM_AO = REG_EX_A * REG_EX_B; 
 						stat_instruction_count_arith++; break;
 
 		case OPC_INC :	REG_MM_AO = REG_EX_A + 1; 		 
@@ -387,13 +386,21 @@ void Processor::executeStage()
 		case OPC_JMP:
 			stallEX = true;
 			stat_instruction_count_control++;	//counting the control instruction
-			REG_MM_AO = REG_EX_PC + ((byte) (((char) REG_EX_A) * 2));
+			REG_MM_AO = REG_EX_PC + (byte) ((usint) REG_EX_A << 1);
 			break;
 
 		case OPC_BEQZ:
 			stallEX = true;
 			stat_instruction_count_control++;	//counting the control instruction
-			REG_MM_AO =  REG_EX_PC + (!REG_EX_A) * ((byte) (((char) REG_EX_A) * 2));
+			if((int)REG_EX_A == 0)
+			{
+				REG_MM_AO =  REG_EX_PC +((usint) ( REG_EX_B << 1));
+			}
+			else
+			{
+				REG_MM_AO =  REG_EX_PC;
+
+			}
 			break;
 
 		default:	break;
@@ -416,7 +423,8 @@ void Processor::executeStage()
 }
 
 void Processor::fetchStage()  {
-	if(!IF_run)  {
+	// wait for ID to be available
+	if(!IF_run)  { // due to backward nature, if ID_run is true, it has been stalling
 		return;
 	}
 	if(ID_run || stallID)  { // due to backward nature, if ID_run is true, it has been stalling
@@ -424,7 +432,7 @@ void Processor::fetchStage()  {
 		return;
 	}
 
-	REG_ID_IR = (((usint) iCache->readByte(REG_IF_PC)) << 8) + ((usint) iCache->readByte(REG_IF_PC + 1));
+	REG_ID_IR = (((usint) iCache->readByte(REG_IF_PC)) << 8) + ((usint) iCache->readByte(REG_IF_PC+1));
 	ID_run = true;
 
 	REG_IF_PC += 2;
@@ -461,6 +469,8 @@ void Processor::decodeStage()  {
 		stallID = true;
 		
 		REG_EX_A = (REG_ID_IR & 0x0ff0) >> 4;
+		REG_EX_PC = REG_IF_PC;
+		stat_stalls_control += 2;
 		return;
 	}
 	if(opcode == OPC_BEQZ)  {
@@ -474,7 +484,8 @@ void Processor::decodeStage()  {
             stallID = false; // RAW stalling is different
 			return;
 		}
-
+		stat_stalls_control += 2;
+		REG_EX_PC = REG_IF_PC;
 		REG_EX_A = regFile->read((REG_ID_IR & 0x0f00) >> 8);
 		REG_EX_B = REG_ID_IR & 0x00ff;
 		return;
@@ -616,7 +627,7 @@ void Processor::writebackStage(){
 	if((opCode == OPC_JMP) || (opCode == OPC_BEQZ))  {
 		// if PC didn't change, carry on with decoding
 		if(REG_IF_PC == REG_WB_AO)  {
-			ID_run = true;
+			ID_run = false;
 			stallID = false;
 			stallEX = false;
 		// if it did, flush pipeline
@@ -624,6 +635,7 @@ void Processor::writebackStage(){
 			REG_IF_PC = REG_WB_AO;
 			flushPipeline();
 		}
+		stat_instruction_count++;
 		return;
 	}
 	if(opCode == OPC_LD) 
@@ -637,6 +649,7 @@ void Processor::writebackStage(){
 	}
 	regFile->setStatus(offset, false);
 	WB_run = false;
+	stat_instruction_count++;	//counting the number of instructions implemented
 }
 
 void Processor::flushPipeline()  {
@@ -675,15 +688,14 @@ void Processor::dumpdata(std::string fnameCache, std::string fnameOut)  {
 	outFile << "Total number of instructions executed: " << stat_instruction_count << std::endl;
 	outFile << "Number of instructions in each class" << std::endl;
 	outFile << "Arithmetic instructions              : " << stat_instruction_count_arith << std::endl;
-	outFile << "Logical instructions				 : " << stat_instruction_count_logic << std::endl;
-	outFile << "Data instructions					 : " << stat_instruction_count_data << std::endl;
-	outFile << "Control instructions				 : " << stat_instruction_count_control << std::endl;
-	outFile << "Halt instructions 					 : " << stat_instruction_count_halt << std::endl;
-	outFile << "Cycles Per Instruction				 : " << ((double) stat_cycles / stat_instruction_count) << std::endl;
-	outFile << "Total number of stalls 				 : " << stat_stalls << std::endl;
-	outFile << "Data stalls (RAW)					 : " << stat_stalls_data << std::endl;
-	outFile << "Control stalls 						 : " << stat_stalls_control << std::endl;
-	outFile << "Cycles						 : " << stat_cycles << std::endl;
+	outFile << "Logical instructions                 : " << stat_instruction_count_logic << std::endl;
+	outFile << "Data instructions                    : " << stat_instruction_count_data << std::endl;
+	outFile << "Control instructions                 : " << stat_instruction_count_control << std::endl;
+	outFile << "Halt instructions                    : " << stat_instruction_count_halt << std::endl;
+	outFile << "Cycles Per Instruction               : " << ((double) stat_cycles / stat_instruction_count) << std::endl;
+	outFile << "Total number of stalls               : " << stat_stalls_data+stat_stalls_control << std::endl;
+	outFile << "Data stalls (RAW)                    : " << stat_stalls_data << std::endl;
+	outFile << "Control stalls                       : " << stat_stalls_control << std::endl;
 }
 
 /*-------------------------------------------------------------------------------------------------
