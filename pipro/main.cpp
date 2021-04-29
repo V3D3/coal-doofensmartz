@@ -9,7 +9,7 @@
 #include <iomanip>
 
 /*-------------------------------------------------------------------------------------------------
-*    Author   : Team DOOFENSMARTZ
+*    Author   : Team DOOFENSMARTZ - CS19B004 Dharani, CS19B028 Kamal, CS19B046 Vedaant
 *    Code     : CPP code to simulate a pipeline processor
 *    Question : CS2610 A8
 -------------------------------------------------------------------------------------------------*/
@@ -18,13 +18,13 @@ typedef unsigned int uint;	//using typedef to change names for easier use
 typedef unsigned short usint;
 typedef unsigned char byte;
 
-#define IF 0	//making definitions to easen the code notations
+#define IF 0
 #define ID 1
 #define EX 2
 #define MM 3
 #define WB 4
 
-#define OPC_ADD 0	//making definitions to easen the code notations
+#define OPC_ADD 0
 #define OPC_SUB 1
 #define OPC_MUL 2
 #define OPC_INC 3
@@ -44,62 +44,77 @@ typedef unsigned char byte;
 #define PIPE_MM 4
 #define PIPE_WB 5
 
-int log2(uint x)	//a function to find value of log of a number wrt base 2
+// returns log of x to base 2
+int log2(uint x)
 {
     int r = 0;
+	// stop when x is exhausted
     while(x > 0)	
     {
-        x = x >> 1;	//performing repeated right shifts to reduce the number by 2 in each step
-        r++;	//counting the number of right shifts
+		// div by 2
+        x = x >> 1;
+        r++;
     }
 
-    return r - 1;	//returing the value of log
+    return r - 1;
 }
 
-int pow2(uint n)	//a function to find value of 2 raised to the power of a number
+// returns a power of 2
+int pow2(uint n)
 {
     int r = 1;
+	// same idea as log
     while(n > 0)
     {
-        r = r << 1;	//performing repeated left shifts to multiply by 2 in each step
-        n--;	//decrimentiing the count
+        r = r << 1;
+        n--;
     }
 
-    return r;	//returning the result
+    return r;
 }
 
 /****************************************************************************************************
  * 	Class Name	: Cache
  * 	Inheritences: NIL
- * 	Use			: Used to act as a cache for a processor
+ * 	Use			: Used to act as a cache for a processor, as Instruction and Data Cache
 ****************************************************************************************************/
-class Cache	//the cache class that is being used for Data and instrution caches
+class Cache
 {
 	uint cacheSize = 256;
-	uint blockSize = 4;
+	uint blockSize = 4; // do NOT change! other params are hardcoded
+	
+	// points to source file
 	std::ifstream * srcFile;
 	std::vector<uint> sets;
 	//Little Endian
 public:
+	// reads a file into cache
 	Cache(std::ifstream * fp);
 	
+	// read a block from cache
 	uint readBlock(byte address);
+	// read a byte from cache
 	byte readByte(byte address);
+	// symmetric methods for writing
 	void writeBlock(byte address, uint data);
 	void writeByte(byte address, byte data);
 
+	// dumps the cache into a file, with given name
 	void dumpCache(std::string filename);
 };
 
-Cache::Cache(std::ifstream * fp){
+Cache::Cache(std::ifstream * fp) {
+	// some inits
 	this->srcFile = fp;
 	sets = std::vector<uint> (cacheSize, 0);
 
+	// get a byte from file
 	std::string hexCode;
 	uint value;
 	int blockNum = 0;
 	int offset = 0;
 	while(*fp >> hexCode){
+		// move to next block
 		if(offset == 4)
 		{
 			offset = 0;
@@ -111,11 +126,15 @@ Cache::Cache(std::ifstream * fp){
 		{
 			value = value << 8;
 		}
+		// and write it onto a block
 		sets[blockNum] += value;
 		offset++;
 	}
+
     fp->close();
 }
+
+// read methods
 uint Cache::readBlock(byte address){
 	return sets[address >> 2];
 }
@@ -132,6 +151,8 @@ byte Cache::readByte(byte address){
 	}
 	return (byte)data;
 }
+
+// write methods
 void Cache::writeBlock(byte address, uint data){
 	sets[address >> 2] = data;
 }
@@ -148,12 +169,16 @@ void Cache::writeByte(byte address, byte data){
 	mask = UINT_MAX - mask;
 	sets[blockNum] = (sets[blockNum] & mask) + temp;
 }
-void Cache::dumpCache(std::string filename)  {
-	std::ofstream outfile;
 
+// cache dump to file
+void Cache::dumpCache(std::string filename)  {
+	// init
+	std::ofstream outfile;
 	outfile.open(filename, std::ofstream::trunc);
 	
 	uint i;
+
+	// output bytes in hex form, pad to be 2 digits
 	outfile << std::setfill('0') << std::setw(2) << std::hex;
 
 	for(i = 0; i < cacheSize; i++)  {
@@ -170,10 +195,15 @@ void Cache::dumpCache(std::string filename)  {
 class RegFile
 {
 	int regSize = 16;
+
+	// source file stream
 	std::ifstream * srcFile;
+	// stores actual data
 	std::vector<byte> RF;
+	// stores status of registers being written to
 	std::vector<bool> status;
 public:
+	// init regfile from a file
 	RegFile(std::ifstream * fp);
 
 	// read a byte from R-index
@@ -204,6 +234,7 @@ RegFile::RegFile(std::ifstream * fp){
     fp->close();
 };
 
+// read/write methods
 byte RegFile::read(byte index){
 	return RF[index];
 }
@@ -211,6 +242,8 @@ void RegFile::write(byte index,byte data){
     if(index == 0)  {return;}
 	RF[index] = data;
 }
+
+// status methods
 bool RegFile::isOpen(byte index){
 	return status[index];
 }
@@ -228,27 +261,30 @@ private:
     Cache* dCache;
 	RegFile* regFile;	//register file object pointer to allot the object later
 
+	// haltScheduled schedules a halt and waits for current pipeline stages to end
 	bool haltScheduled = false;
+	// halted indicates true halt
 	bool halted = false;
 
+	// if any is true, that stage will be stalled
 	bool stallIF = false;
 	bool stallID = false;
 	bool stallEX = false;
 	bool stallMM = false;
 	bool stallWB = false;
 
-	// declare IF registers here
+	// IF pipeline registers here
 	byte REG_IF_PC = 0u; // first instruction
 	bool IF_run = true;
 	void fetchStage();
 
-	// declare ID registers here
+	// ID pipeline registers here
 	usint REG_ID_IR = 0u; // add R0 to R0 and store in R0
 	byte  REG_ID_PC = 0u;
 	bool  ID_run = false;
 	void decodeStage();
 
-	// declare EX registers here
+	// EX pipeline registers here
 	usint REG_EX_IR = 0u;
 	byte  REG_EX_PC = 0u;
 	byte  REG_EX_A  = 0u;
@@ -256,14 +292,14 @@ private:
 	bool  EX_run = false;
 	void executeStage();
 
-	// declare MM registers here
+	// MM pipeline registers here
 	usint REG_MM_IR = 0u;
 	byte  REG_MM_AO = 0u;
     bool  REG_MM_COND = false;
 	bool  MM_run = false;
 	void memoryStage();
 
-	// declare WB registers here
+	// WB pipeline registers here
 	usint REG_WB_IR   = 0u;
 	byte  REG_WB_AO   = 0u;
 	byte  REG_WB_LMD  = 0u;
@@ -301,24 +337,30 @@ public:
 	int stat_stalls_control = 0;
 };
 
+// init: get files
 Processor::Processor(std::ifstream * Icache, std::ifstream * Dcache, std::ifstream * regFile)  {
 	iCache = new Cache(Icache);
 	dCache = new Cache(Dcache);
 	this->regFile = new RegFile(regFile);
 }
 
+// destruct
 Processor::~Processor()  {
 	delete iCache;
 	delete dCache;
 	delete regFile;
 }
 
-void Processor::run()  {	//the run function to initiate the processor
-	while(!haltScheduled && !isHalted())  {	//while halt is not called execute instructions
+// runs until halted
+void Processor::run()  {
+	// while halt is not called execute instructions
+	while(!haltScheduled && !isHalted())  {
 		cycle();	//call the cycle function, the equivalent of one cycle of the processor
 	}
 
+	// calm pipeline down
 	while(haltScheduled)  {
+		// once all stages done, halt truly
 		if((EX_run || MM_run || WB_run) == false)  {
 			halted = true;
 			haltScheduled = false;
@@ -349,12 +391,13 @@ bool Processor::isHalted()  {
 	return halted;
 }
 
-
+// EX
 void Processor::executeStage()
 {
 	if(!EX_run || stallEX)  {
 		return;
 	}
+
 	int opCode = REG_EX_IR >> 12;
 	switch(opCode)
 	{
@@ -414,6 +457,7 @@ void Processor::executeStage()
 	EX_run = false;	//setting that the stage is finished
 }
 
+// IF
 void Processor::fetchStage()  {
 	// wait for ID to be available
 	if(!IF_run)  { // due to backward nature, if ID_run is true, it has been stalling
@@ -423,11 +467,15 @@ void Processor::fetchStage()  {
 		IF_run = true;
 		return;
 	}
+
 	REG_ID_IR = (((usint) iCache->readByte(REG_IF_PC)) << 8) + ((usint) iCache->readByte(REG_IF_PC+1));
 	ID_run = true;
+
+	// inc PC
 	REG_IF_PC += 2;
 }
 
+// ID
 void Processor::decodeStage()  {
 	if((!ID_run) || stallID)  {
 		return;
@@ -581,7 +629,7 @@ void Processor::decodeStage()  {
 	}
 }
 
-
+// MEM
 void Processor::memoryStage(){
 	if(!MM_run || stallMM)
 	{
@@ -636,6 +684,7 @@ void Processor::memoryStage(){
 	return;
 }
 
+// WB
 void Processor::writebackStage(){
 	if(!WB_run || stallWB)
 	{
@@ -655,6 +704,7 @@ void Processor::writebackStage(){
 	WB_run = false;
 }
 
+// flushes the pipeline
 void Processor::flushPipeline()  {
 	IF_run = true;
 	ID_run = false;
@@ -682,6 +732,7 @@ void Processor::flushPipeline()  {
 	stallWB = false;
 }
 
+// outputs processor stats
 void Processor::dumpdata(std::string fnameCache, std::string fnameOut)  {
 	dCache->dumpCache(fnameCache);
 
