@@ -78,8 +78,6 @@ class Cache	//the cache class that is being used for Data and instrution caches
 	uint blockSize = 4;
 	std::ifstream * srcFile;
 	std::vector<uint> sets;
-	int num_of_reads = 0;
-	int num_of_writes = 0;
 	//Little Endian
 public:
 	Cache(std::ifstream * fp);
@@ -89,8 +87,6 @@ public:
 	void writeBlock(byte address, uint data);
 	void writeByte(byte address, byte data);
 	void resetAccesses();
-	bool readBusy();
-	bool writeBusy();
 	void updateSrcFile();
 };
 Cache::Cache(std::ifstream * fp){
@@ -155,20 +151,6 @@ void Cache::resetAccesses(){
 	num_of_reads = 0;
 	num_of_writes = 0;
 }
- bool Cache::readBusy(){
- 	if(num_of_reads == 1)
- 	{
- 		return true;
- 	}
- 	return false;
- }
- bool Cache::writeBusy(){
- 	if(num_of_writes == 1)
- 	{
- 		return true;
- 	}
- 	return false;
- }
 
 /****************************************************************************************************
  * 	Class Name	: RegFile
@@ -181,8 +163,6 @@ class RegFile
 	std::ifstream * srcFile;
 	std::vector<byte> RF;
 	std::vector<std::pair<bool, int>> status;	//vector of pairs to manage hazards
-	int num_of_reads = 0;
-	int num_of_writes = 0;
 public:
 	RegFile(std::ifstream * fp);
 	~RegFile();
@@ -193,12 +173,6 @@ public:
 	void write(byte index, byte data);
 	// 
 	void updateSrcFile();
-	// reset the access counts (new cycle)
-	void resetAccesses();
-	// are the read ports busy?
-	bool readBusy();
-	// is the write port busy?
-	bool writeBusy();
 	// sets status of a register - true indicates it is being written to
 	// currStage indicates the pipeline stage of the instruction writing
 	void setStatus(byte index, bool currStatus, int currStage);
@@ -233,24 +207,6 @@ void RegFile::write(byte index,byte data){
 	num_of_writes++;
 	RF[index] = data;
 }
-void RegFile::resetAccesses(){
-	num_of_reads = 0;
-	num_of_writes = 0;
-}
- bool RegFile::readBusy(){
- 	if(num_of_reads == 2)
- 	{
- 		return true;
- 	}
- 	return false;
- }
- bool RegFile::writeBusy(){
- 	if(num_of_writes == 1)
- 	{
- 		return true;
- 	}
- 	return false;
- }
 
 int RegFile::isOpen(byte index){
 	return (1 - status[index].first) * status[index].second;
