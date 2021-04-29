@@ -79,8 +79,6 @@ class Cache	//the cache class that is being used for Data and instrution caches
 	uint blockSize = 4;
 	std::ifstream * srcFile;
 	std::vector<uint> sets;
-	int num_of_reads = 0;
-	int num_of_writes = 0;
 	//Little Endian
 public:
 	Cache(std::ifstream * fp);
@@ -119,7 +117,6 @@ Cache::Cache(std::ifstream * fp){
     fp->close();
 }
 uint Cache::readBlock(byte address){
-	num_of_reads++;
 	return sets[address >> 2];
 }
 byte Cache::readByte(byte address){
@@ -136,19 +133,20 @@ byte Cache::readByte(byte address){
 	return (byte)data;
 }
 void Cache::writeBlock(byte address, uint data){
-	sets[address >> log2(blockSize)] = data;
+	sets[address >> 2] = data;
 }
 void Cache::writeByte(byte address, byte data){
-	num_of_writes++;
+	uint temp  = (uint)data;
 	byte blockNum = address >> 2;
-	byte offset = address & (blockSize-1);
+	byte offset = address & (3);
 	uint mask = cacheSize-1;
-	for(int i = 0; i < offset; i++)
+	for(int i = 0; i < (int)offset; i++)
 	{
 		mask = mask << 8;
+		temp = temp << 8;
 	}
 	mask = UINT_MAX - mask;
-	sets[blockNum] = (sets[blockNum] & mask) + data;
+	sets[blockNum] = (sets[blockNum] & mask) + temp;
 }
 void Cache::dumpCache(std::string filename)  {
 	std::ofstream outfile;
@@ -411,7 +409,7 @@ void Processor::executeStage()
 
 		default:	break;
 	}
-
+	REG_MM_IR = REG_EX_IR;
 	MM_run = true;	//marking that next instruction to be implemented is memmory 
 	EX_run = false;	//setting that the stage is finished
 }
@@ -425,10 +423,8 @@ void Processor::fetchStage()  {
 		IF_run = true;
 		return;
 	}
-
 	REG_ID_IR = (((usint) iCache->readByte(REG_IF_PC)) << 8) + ((usint) iCache->readByte(REG_IF_PC+1));
 	ID_run = true;
-
 	REG_IF_PC += 2;
 }
 
@@ -443,7 +439,6 @@ void Processor::decodeStage()  {
 	}
 
 	REG_EX_IR = REG_ID_IR;
-
 	byte opcode = (REG_ID_IR & 0xf000) >> 12;
 	
 	// halt class
@@ -484,7 +479,6 @@ void Processor::decodeStage()  {
 		REG_EX_B = REG_ID_IR & 0x00ff;
 		return;
 	}
-	
 	// data class
 	usint addr1;
 	usint addr2;
@@ -594,9 +588,25 @@ void Processor::memoryStage(){
 		return;
 	}
 	usint opCode = REG_MM_IR >> 12;
-	if(opCode == OPC_ST)
+	byte offset = (byte) ((REG_MM_IR & 0x0f00) >> 8);
+	if((opCode == OPC_JMP) || (opCode == OPC_BEQZ))  {
+		// if PC didn't change, carry on with decoding
+		if(REG_IF_PC == REG_MM_AO)  {
+			ID_run = false;
+			stallID = false;
+			stallEX = false;
+		// if it did, flush pipeline
+		}  else  {
+			REG_IF_PC = REG_MM_AO;
+			flushPipeline();
+		}
+		WB_run = false;
+		return;
+	}
+	
+	else if(opCode == OPC_ST)
 	{
-		dCache->writeByte(REG_MM_AO,REG_EX_B);
+		dCache->writeByte(REG_MM_AO,regFile->read((REG_MM_IR & 0x0f00) >> 8));
 		MM_run = false;
         REG_WB_AO = 0u;
         REG_WB_IR = 0u;
@@ -611,7 +621,8 @@ void Processor::memoryStage(){
 		REG_WB_IR = REG_MM_IR;
 		REG_WB_AO = REG_MM_AO;
 		WB_run = true;
-	}  else  {
+	}  
+	else  {
 		MM_run = false;
         REG_WB_AO = REG_MM_AO;
         REG_WB_IR = REG_MM_IR;
@@ -630,25 +641,10 @@ void Processor::writebackStage(){
 	{
 		return;
 	}
-
 	usint opCode = REG_WB_IR >> 12;
 	byte offset = (byte) ((REG_WB_IR & 0x0f00) >> 8);
-	if((opCode == OPC_JMP) || (opCode == OPC_BEQZ))  {
-		// if PC didn't change, carry on with decoding
-		if(REG_IF_PC == REG_WB_AO)  {
-			ID_run = false;
-			stallID = false;
-			stallEX = false;
-		// if it did, flush pipeline
-		}  else  {
-			REG_IF_PC = REG_WB_AO;
-			flushPipeline();
-		}
-		return;
-	}
 	if(opCode == OPC_LD) 
 	{
-		 
 		regFile->write(offset, REG_WB_LMD);
 	}
 	else 
