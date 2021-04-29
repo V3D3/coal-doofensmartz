@@ -301,13 +301,16 @@ void Processor::run()  {	//the run function to initiate the processor
 		cycle();	//call the cycle function, the equivalent of one cycle of the processor
 	}
 
-	while(!haltScheduled)  {
+	while(haltScheduled)  {
+		cycle();	//call the cycle function, the equivalent of one cycle of the processor
 		if((EX_run || MM_run || WB_run) == false)  {
 			halted = true;
 			haltScheduled = false;
 			return;
 		}
 	}
+
+	stat_instruction_count = stat_instruction_count + stat_instruction_count_halt;	//as halt wont reach the writeback
 }
 
 void Processor::cycle()  {
@@ -335,24 +338,42 @@ void Processor::executeStage()
 	
 	switch(opCode)
 	{
-		case OPC_ADD :	REG_MM_AO = REG_EX_A + REG_EX_B; break;
-		case OPC_SUB :	REG_MM_AO = REG_EX_A - REG_EX_B; break;
-		case OPC_MUL :	REG_MM_AO = REG_EX_A * REG_EX_B; break;
-		case OPC_INC :	REG_MM_AO = REG_EX_A + 1; 		 break;
-		case OPC_AND :	REG_MM_AO = REG_EX_A & REG_EX_B; break;
-		case OPC_OR :	REG_MM_AO = REG_EX_A | REG_EX_B; break;
-		case OPC_NOT :	REG_MM_AO = ~REG_EX_A; 			 break;
-		case OPC_XOR :	REG_MM_AO = REG_EX_A ^ REG_EX_B; break;
+		case OPC_ADD :	REG_MM_AO = REG_EX_A + REG_EX_B; 
+						stat_instruction_count_arith++;	break;
+
+		case OPC_SUB :	REG_MM_AO = REG_EX_A - REG_EX_B;
+						stat_instruction_count_arith++; break;
+
+		case OPC_MUL :	REG_MM_AO = REG_EX_A * REG_EX_B; 
+						stat_instruction_count_arith++; break;
+
+		case OPC_INC :	REG_MM_AO = REG_EX_A + 1; 		 
+						stat_instruction_count_arith++; break;
+
+		case OPC_AND :	REG_MM_AO = REG_EX_A & REG_EX_B; 
+						stat_instruction_count_logic; 	break;
+
+		case OPC_OR :	REG_MM_AO = REG_EX_A | REG_EX_B; 
+						stat_instruction_count_logic; 	break;
+
+		case OPC_NOT :	REG_MM_AO = ~REG_EX_A;
+						stat_instruction_count_logic; 	break;
+
+		case OPC_XOR :	REG_MM_AO = REG_EX_A ^ REG_EX_B;
+						stat_instruction_count_logic; 	break;
+
 		case OPC_LD :	REG_MM_AO = REG_EX_A + REG_EX_B; break;
 		case OPC_ST :	REG_MM_AO = REG_EX_A + REG_EX_B; break;
 
 		case OPC_JMP:
 			stallEX = true;
+			stat_instruction_count_control++;	//counting the control instruction
 			REG_MM_AO = REG_EX_PC + (byte) ((usint) REG_EX_A << 1);
 			break;
 
 		case OPC_BEQZ:
 			stallEX = true;
+			stat_instruction_count_control++;	//counting the control instruction
 			REG_MM_AO =  REG_EX_PC + (!REG_EX_A) * ((byte) ((usint) REG_EX_B << 1));
 			break;
 
@@ -407,7 +428,7 @@ void Processor::decodeStage()  {
 	if(opcode == OPC_HALT)  {
 		IF_run = false;
 		ID_run = false;
-
+		stat_instruction_count_halt++;	//counting number of halt instructions
 		haltScheduled = true;
 		// let the other pipeline stages (previous instructions) complete
 		return;
@@ -555,6 +576,7 @@ void Processor::memoryStage(){
 		WB_run = true;
 	}
 	MM_run = false;
+	stat_instruction_count_data++;	//counting the number of memory instructions
 	return;
 }
 
@@ -589,7 +611,8 @@ void Processor::writebackStage(){
 		regFile->write(offset, REG_WB_AO);
 	}
 	regFile->setStatus(offset, false);
-	MM_run = false;
+	WB_run = false;
+	stat_instruction_count++;	//counting the number of instructions implemented
 }
 
 void Processor::flushPipeline()  {
