@@ -572,8 +572,7 @@ void Processor::writebackStage(){
 	}
 
 	usint opCode = REG_WB_IR >> 12;
-	usint offset = REG_WB_IR << 4;
-
+	byte offset = (byte) ((REG_WB_IR & 0x0f00) >> 8);
 	if((opCode == OPC_JMP) || (opCode == OPC_BEQZ))  {
 		// if PC didn't change, carry on with decoding
 		if(REG_IF_PC == REG_WB_AO)  {
@@ -589,15 +588,14 @@ void Processor::writebackStage(){
 	}
 	if(opCode == OPC_LD) 
 	{
-		byte offset = (byte) ((REG_WB_IR & 0x0f00) >> 8); 
+		 
 		regFile->write(offset, REG_WB_LMD);
 	}
 	else 
 	{
-		usint offset = (REG_WB_IR & 0x0f00) >> 8;
-		regFile->write((byte)offset, REG_WB_AO);
+		regFile->write(offset, REG_WB_AO);
 	}
-	regFile->setStatus((byte) offset, false);
+	regFile->setStatus(offset, false);
 	MM_run = false;
 }
 
