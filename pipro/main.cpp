@@ -387,13 +387,13 @@ void Processor::executeStage()
 		case OPC_JMP:
 			stallEX = true;
 			stat_instruction_count_control++;	//counting the control instruction
-			REG_MM_AO = REG_EX_PC + (byte) ((usint) REG_EX_A << 1);
+			REG_MM_AO = REG_EX_PC + ((byte) (((char) REG_EX_A) * 2));
 			break;
 
 		case OPC_BEQZ:
 			stallEX = true;
 			stat_instruction_count_control++;	//counting the control instruction
-			REG_MM_AO =  REG_EX_PC + (!REG_EX_A) * ((byte) ((usint) REG_EX_B << 1));
+			REG_MM_AO =  REG_EX_PC + (!REG_EX_A) * ((byte) (((char) REG_EX_A) * 2));
 			break;
 
 		default:	break;
