@@ -386,6 +386,7 @@ void Processor::executeStage()
 
 		case OPC_LD :	REG_MM_AO = REG_EX_A + REG_EX_B;
 						stat_instruction_count_data++;	break;
+						
 		case OPC_ST :	REG_MM_AO = REG_EX_A + REG_EX_B;
 						stat_instruction_count_data++;	break;
 
