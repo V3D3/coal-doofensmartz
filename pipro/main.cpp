@@ -320,15 +320,14 @@ void Processor::run()  {	//the run function to initiate the processor
 	}
 
 	while(haltScheduled)  {
-		cycle();	//call the cycle function, the equivalent of one cycle of the processor
 		if((EX_run || MM_run || WB_run) == false)  {
 			halted = true;
 			haltScheduled = false;
+			stat_instruction_count = stat_instruction_count + stat_instruction_count_halt;	//as halt wont reach the writeback
 			return;
 		}
+		cycle();	//call the cycle function, the equivalent of one cycle of the processor
 	}
-
-	stat_instruction_count = stat_instruction_count + stat_instruction_count_halt;	//as halt wont reach the writeback
 }
 
 void Processor::cycle()  {
@@ -352,8 +351,10 @@ bool Processor::isHalted()  {
 
 void Processor::executeStage()
 {
+	if(!EX_run || stallEX)  {
+		return;
+	}
 	int opCode = REG_EX_IR >> 12;
-	
 	switch(opCode)
 	{
 		case OPC_ADD :	REG_MM_AO = REG_EX_A + REG_EX_B; 
@@ -416,13 +417,15 @@ void Processor::executeStage()
 
 void Processor::fetchStage()  {
 	// wait for ID to be available
+	if(!IF_run)  { // due to backward nature, if ID_run is true, it has been stalling
+		return;
+	}
 	if(ID_run || stallID)  { // due to backward nature, if ID_run is true, it has been stalling
 		IF_run = true;
 		return;
 	}
 
-	REG_ID_IR = (((usint) iCache->readByte(REG_IF_PC)) << 8) + ((usint) iCache->readByte(REG_IF_PC));
-
+	REG_ID_IR = (((usint) iCache->readByte(REG_IF_PC)) << 8) + ((usint) iCache->readByte(REG_IF_PC+1));
 	ID_run = true;
 
 	REG_IF_PC += 2;
@@ -451,7 +454,6 @@ void Processor::decodeStage()  {
 		// let the other pipeline stages (previous instructions) complete
 		return;
 	}
-
 	ID_run = false;
 	EX_run = true;
 
@@ -467,6 +469,7 @@ void Processor::decodeStage()  {
 
 		if(regFile->isOpen((REG_ID_IR & 0x0f00) >> 8))
 		{
+			stat_stalls_data++;
 			EX_run = false;
 			ID_run = true;
             stallID = false; // RAW stalling is different
@@ -485,6 +488,7 @@ void Processor::decodeStage()  {
 		addr1 = (REG_ID_IR & 0x00f0) >> 4;
 		if(regFile->isOpen(addr1))
 		{
+			stat_stalls_data++;
 			EX_run = false;
 			ID_run = true;
 			return;
@@ -499,6 +503,7 @@ void Processor::decodeStage()  {
 		addr1 = (REG_ID_IR & 0x00f0) >> 4;
 		if(regFile->isOpen(addr1))
 		{
+			stat_stalls_data++;
 			EX_run = false;
 			ID_run = true;
 			return;
@@ -516,6 +521,7 @@ void Processor::decodeStage()  {
 		addr2 = REG_ID_IR & 0x000f;
 		if(regFile->isOpen(addr1) || regFile->isOpen(addr2))
 		{
+			stat_stalls_data++;
 			EX_run = false;
 			ID_run = true;
 			return;
@@ -523,7 +529,6 @@ void Processor::decodeStage()  {
 
 		REG_EX_A = regFile->read((REG_ID_IR & 0x00f0) >> 4);
 		REG_EX_B = regFile->read(REG_ID_IR & 0x000f);
-
         regFile->setStatus((byte) ((REG_ID_IR & 0x0f00) >> 8), true);
 		return;
 	}
@@ -531,6 +536,7 @@ void Processor::decodeStage()  {
 		addr1 = (REG_ID_IR & 0x0f00) >> 8;
 		if(regFile->isOpen(addr1))
 		{
+			stat_stalls_data++;
 			EX_run = false;
 			ID_run = true;
 			return;
@@ -547,6 +553,7 @@ void Processor::decodeStage()  {
 		addr2 = REG_ID_IR & 0x000f;
 		if(regFile->isOpen(addr1) || regFile->isOpen(addr2))
 		{
+			stat_stalls_data++;
 			EX_run = false;
 			ID_run = true;
 			return;
@@ -564,6 +571,7 @@ void Processor::decodeStage()  {
 		addr1 = (REG_ID_IR & 0x00f0) >> 4;
         if(regFile->isOpen(addr1))
         {
+        	stat_stalls_data++;
             EX_run = false;
             ID_run = true;
             return;
@@ -677,6 +685,7 @@ void Processor::dumpdata(std::string fnameCache, std::string fnameOut)  {
 	outFile << "Total number of stalls 				 : " << stat_stalls << std::endl;
 	outFile << "Data stalls (RAW)					 : " << stat_stalls_data << std::endl;
 	outFile << "Control stalls 						 : " << stat_stalls_control << std::endl;
+	outFile << "Cycles						 : " << stat_cycles << std::endl;
 }
 
 /*-------------------------------------------------------------------------------------------------
