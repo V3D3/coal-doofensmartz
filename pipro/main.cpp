@@ -111,7 +111,7 @@ Cache::Cache(std::ifstream * fp){
 		value = std::stoi(hexCode,0,16);
 		for(int i = 0; i < offset; i++)
 		{
-			value << 8;
+			value = value << 8;
 		}
 		sets[blockNum] += value;
 		offset++;
@@ -127,11 +127,11 @@ byte Cache::readByte(byte address){
 	uint offset = address & (blockSize-1);
 	for(int i = offset; i < 3; i++)
 	{
-		data << 8;
+		data = data << 8;
 	}
 	for(int i = 0; i < 3; i++)
 	{
-		data >> 8;
+		data = data >> 8;
 	}
 	return (byte)data;
 }
@@ -145,7 +145,7 @@ void Cache::writeByte(byte address, byte data){
 	uint mask = cacheSize-1;
 	for(int i = 0; i < offset; i++)
 	{
-		mask << 8;
+		mask = mask << 8;
 	}
 	mask = UINT_MAX - mask;
 	sets[blockNum] = (sets[blockNum] & mask) + data;
@@ -155,10 +155,9 @@ void Cache::dumpCache(std::string filename)  {
 
 	outfile.open(filename, std::ofstream::trunc);
 	
-	int i;
-	char byteString[2];
-
+	uint i;
 	outfile << std::setfill('0') << std::setw(2);
+
 	for(i = 0; i < cacheSize; i++)  {
 		outfile << readByte(i) << std::endl;
 	}
@@ -370,16 +369,16 @@ void Processor::executeStage()
 						stat_instruction_count_arith++; break;
 
 		case OPC_AND :	REG_MM_AO = REG_EX_A & REG_EX_B; 
-						stat_instruction_count_logic; 	break;
+						stat_instruction_count_logic++; 	break;
 
 		case OPC_OR :	REG_MM_AO = REG_EX_A | REG_EX_B; 
-						stat_instruction_count_logic; 	break;
+						stat_instruction_count_logic++; 	break;
 
 		case OPC_NOT :	REG_MM_AO = ~REG_EX_A;
-						stat_instruction_count_logic; 	break;
+						stat_instruction_count_logic++; 	break;
 
 		case OPC_XOR :	REG_MM_AO = REG_EX_A ^ REG_EX_B;
-						stat_instruction_count_logic; 	break;
+						stat_instruction_count_logic++; 	break;
 
 		case OPC_LD :	REG_MM_AO = REG_EX_A + REG_EX_B; break;
 		case OPC_ST :	REG_MM_AO = REG_EX_A + REG_EX_B; break;
