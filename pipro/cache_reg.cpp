@@ -173,6 +173,7 @@ class RegFile
 	int regSize = 16;
 	std::ifstream * srcFile;
 	std::vector<byte> RF;
+	std::vector<pair<bool, int>> status;	//vector of pairs to manage hazards
 	int num_of_reads = 0;
 	int num_of_writes = 0;
 public:
@@ -184,11 +185,16 @@ public:
 	void resetAccesses();
 	bool readBusy();
 	bool writeBusy();
+	void setStatus(byte index, bool currStatus);
+	bool isOpen(byte index);
 };
 
 RegFile::RegFile(std::ifstream * fp){
 	this->srcFile = fp;
 	RF = std::vector<byte> (regSize);
+	for(int i=0; i<regSize; i++)
+		status.push_back({true, 0});	//initialising the status
+
 	std::string hexCode;
 	byte value;
 	int regNum = 0;
@@ -226,6 +232,12 @@ void RegFile::resetAccesses(){
  	return false;
  }
 
+bool RegFile::isOpen(byte index){
+	return status[index];
+}
+void RegFile::setStatuset(byte index, bool currStatus){
+	status[index] = currStatus;
+}
 /****************************************************************************************************
  * 	Class Name	: Processor
  * 	Inheritences: NIL
