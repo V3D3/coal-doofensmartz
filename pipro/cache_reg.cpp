@@ -86,7 +86,6 @@ public:
 	byte readByte(byte address);
 	void writeBlock(byte address, uint data);
 	void writeByte(byte address, byte data);
-	void resetAccesses();
 	void updateSrcFile();
 };
 Cache::Cache(std::ifstream * fp){
@@ -146,10 +145,6 @@ void Cache::writeByte(byte address, byte data){
 	}
 	mask = UINT_MAX - mask;
 	sets[blockNum] = (sets[blockNum] & mask) + data;
-}
-void Cache::resetAccesses(){
-	num_of_reads = 0;
-	num_of_writes = 0;
 }
 
 /****************************************************************************************************
