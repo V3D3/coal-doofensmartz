@@ -233,7 +233,8 @@ void RegFile::resetAccesses(){
 ****************************************************************************************************/
 class Processor  {
 private:
-	Cache* iCache, dCache;	//cache object pointers to store instruction and data caches
+	Cache* iCache;
+	Cache* dCache;	//cache object pointers to store instruction and data caches
 	RegFile* regFile;	//register file object pointer to allot the object later
 
 	bool haltScheduled = false;
